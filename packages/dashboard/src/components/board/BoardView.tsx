@@ -13,6 +13,7 @@ interface Project {
   taskSummary: {
     pending: number;
     in_progress: number;
+    review: number;
     blocked: number;
     completed: number;
   };
@@ -213,6 +214,7 @@ export function BoardView({ projects, agents, employees }: BoardViewProps) {
                     <p className="text-xs text-[var(--muted)]">Status report</p>
                     <p className="font-medium">
                       {project.taskSummary?.in_progress ?? 0} active ·{" "}
+                      {project.taskSummary?.review ?? 0} review ·{" "}
                       {project.taskSummary?.blocked ?? 0} blocked ·{" "}
                       {project.taskSummary?.completed ?? 0} done
                     </p>

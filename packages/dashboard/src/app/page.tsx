@@ -35,6 +35,7 @@ interface ProjectWithDetails extends Project {
   taskSummary: {
     pending: number;
     in_progress: number;
+    review: number;
     blocked: number;
     completed: number;
   };
@@ -92,6 +93,7 @@ export default function BoardPage() {
                 {
                   pending: 0,
                   in_progress: 0,
+                  review: 0,
                   blocked: 0,
                   completed: 0,
                 }
@@ -111,6 +113,7 @@ export default function BoardPage() {
                 taskSummary: {
                   pending: 0,
                   in_progress: 0,
+                  review: 0,
                   blocked: 0,
                   completed: 0,
                 },
