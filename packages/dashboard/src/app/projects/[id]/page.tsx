@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -164,6 +165,17 @@ export default function ProjectDetailPage() {
       setProject((prev) =>
         prev ? { ...prev, blockers: [created, ...(prev.blockers ?? [])] } : prev
       );
+      void logActivity({
+        event_type: "blocker",
+        title: `Blocker added: ${project?.name ?? projectId}`,
+        description: created.description,
+        project_id: projectId,
+        metadata: {
+          blockerId: created.id,
+          severity: created.severity,
+          reportedBy: created.reportedBy,
+        },
+      });
       setBlockerDescription("");
       setBlockerSeverity("medium");
       setBlockerReportedBy("CEO");
@@ -178,6 +190,7 @@ export default function ProjectDetailPage() {
     if (!projectId) return;
     setMutating(`resolve:${blockerId}`);
     try {
+      const previous = project?.blockers?.find((b) => b.id === blockerId) ?? null;
       const resolved = await apiFetch<Blocker>(
         `/api/projects/${projectId}/blockers/${blockerId}/resolve`,
         { method: "PATCH", body: JSON.stringify({}) }
@@ -188,6 +201,13 @@ export default function ProjectDetailPage() {
           ...prev,
           blockers: (prev.blockers ?? []).map((b) => (b.id === blockerId ? resolved : b)),
         };
+      });
+      void logActivity({
+        event_type: "status_change",
+        title: `Blocker resolved: ${project?.name ?? projectId}`,
+        description: previous?.description ?? "",
+        project_id: projectId,
+        metadata: { blockerId: blockerId, severity: previous?.severity ?? "medium" },
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to resolve blocker");
@@ -215,6 +235,13 @@ export default function ProjectDetailPage() {
           ? { ...prev, achievements: [created, ...(prev.achievements ?? [])] }
           : prev
       );
+      void logActivity({
+        event_type: "note",
+        title: `Achievement: ${project?.name ?? projectId}`,
+        description: created.description,
+        project_id: projectId,
+        metadata: { achievementId: created.id, achievedBy: created.achievedBy },
+      });
       setAchievementDescription("");
       setAchievementBy("CEO");
     } catch (err) {
@@ -227,11 +254,30 @@ export default function ProjectDetailPage() {
   async function updateTaskStatus(taskId: string, status: TaskStatus) {
     setMutating(`task:${taskId}`);
     try {
+      const previous = tasks.find((t) => t.id === taskId);
       const updated = await apiFetch<TaskLite>(`/api/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      const eventType =
+        status === "in_progress"
+          ? "start_task"
+          : status === "completed"
+            ? "finish_task"
+            : status === "blocked"
+              ? "blocker"
+              : "status_change";
+      void logActivity({
+        event_type: eventType,
+        title: `Task status: ${updated.title}`,
+        description: previous
+          ? `${previous.status} -> ${updated.status}`
+          : `-> ${updated.status}`,
+        project_id: projectId,
+        task_id: updated.id,
+        metadata: { status: updated.status, priority: updated.priority },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update task");
     } finally {

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -225,6 +226,14 @@ function TasksPageContent() {
         }),
       });
       setTasks((prev) => [created, ...prev]);
+      void logActivity({
+        event_type: "note",
+        title: `Task created: ${created.title}`,
+        description: created.description,
+        project_id: created.projectId,
+        task_id: created.id,
+        metadata: { status: created.status, priority: created.priority },
+      });
       setTitle("");
       setDescription("");
       setProjectId(queryProjectId);
@@ -243,11 +252,30 @@ function TasksPageContent() {
 
   async function handleStatusChange(taskId: string, status: TaskStatus) {
     try {
+      const previous = tasks.find((t) => t.id === taskId);
       const updated = await apiFetch<Task>(`/api/tasks/${taskId}`, {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
       setTasks((prev) => prev.map((t) => (t.id === taskId ? updated : t)));
+      const eventType =
+        status === "in_progress"
+          ? "start_task"
+          : status === "completed"
+            ? "finish_task"
+            : status === "blocked"
+              ? "blocker"
+              : "status_change";
+      void logActivity({
+        event_type: eventType,
+        title: `Task status: ${updated.title}`,
+        description: previous
+          ? `${previous.status} -> ${updated.status}`
+          : `-> ${updated.status}`,
+        project_id: updated.projectId,
+        task_id: updated.id,
+        metadata: { status: updated.status, priority: updated.priority },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update task");
     }

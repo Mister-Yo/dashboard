@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -129,6 +130,12 @@ export default function KnowledgePage() {
         }),
       });
       setEntries((prev) => [created, ...prev]);
+      void logActivity({
+        event_type: "note",
+        title: `Knowledge added: ${created.title}`,
+        description: created.summary || created.url || "",
+        metadata: { source: created.source, tags: created.tags, url: created.url },
+      });
       setTitle("");
       setUrl("");
       setSource("manual");

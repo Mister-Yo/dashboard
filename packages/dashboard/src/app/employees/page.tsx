@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -90,6 +91,17 @@ export default function EmployeesPage() {
         { method: "POST" }
       );
       setApiKey(keyResult.apiKey);
+      void logActivity({
+        event_type: "note",
+        title: `Employee created: ${created.name}`,
+        description: `role=${created.role}`,
+        metadata: {
+          employeeId: created.id,
+          role: created.role,
+          email: created.email,
+          telegramUsername: created.telegramUsername,
+        },
+      });
 
       setName("");
       setRole("");

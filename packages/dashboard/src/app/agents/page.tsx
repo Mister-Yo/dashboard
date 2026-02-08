@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,6 +103,12 @@ export default function AgentsPage() {
         }),
       });
       setAgents((prev) => [result.agent, ...prev]);
+      void logActivity({
+        event_type: "note",
+        title: `Agent created: ${result.agent.name}`,
+        description: `type=${result.agent.type}`,
+        metadata: { agentId: result.agent.id, permissions: result.agent.permissions },
+      });
       if (result.apiKey) {
         setApiKey(result.apiKey);
       }

@@ -21,9 +21,8 @@ app.use(
   })
 );
 
-// Health check
-app.get("/", (c) => {
-  return c.json({
+function healthPayload() {
+  return {
     name: "AI Company Dashboard API",
     version: "0.1.0",
     status: "ok",
@@ -37,8 +36,18 @@ app.get("/", (c) => {
       activityStatus: "/api/activity/status",
     },
     timestamp: new Date().toISOString(),
-  });
+  };
+}
+
+// Health check
+app.get("/", (c) => {
+  return c.json(healthPayload());
 });
+
+// Nginx usually proxies /api/* without rewrite; expose health on that path too.
+app.get("/api", (c) => c.json(healthPayload()));
+app.get("/api/", (c) => c.json(healthPayload()));
+app.get("/api/health", (c) => c.json(healthPayload()));
 
 // Routes
 app.route("/api/agents", agentsRouter);

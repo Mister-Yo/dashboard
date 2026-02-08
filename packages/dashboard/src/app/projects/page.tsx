@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,13 @@ export default function ProjectsPage() {
         }),
       });
       setProjects((prev) => [created, ...prev]);
+      void logActivity({
+        event_type: "note",
+        title: `Project created: ${created.name}`,
+        description: created.description,
+        project_id: created.id,
+        metadata: { githubRepo: created.githubRepo, githubBranch: created.githubBranch },
+      });
       setName("");
       setDescription("");
       setRepo("");
@@ -146,6 +154,14 @@ export default function ProjectsPage() {
         body: JSON.stringify({ currentProjectId: projectId }),
       });
       setAgents((prev) => prev.map((a) => (a.id === agentId ? updated : a)));
+      const projectName = projects.find((p) => p.id === projectId)?.name ?? projectId;
+      void logActivity({
+        event_type: "status_change",
+        title: `Agent assigned: ${updated.name}`,
+        description: `-> project ${projectName}`,
+        project_id: projectId,
+        metadata: { agentId: updated.id, agentName: updated.name },
+      });
       setAgentToAssign((prev) => ({ ...prev, [projectId]: "" }));
     } catch (err) {
       setMembershipError(
@@ -160,11 +176,24 @@ export default function ProjectsPage() {
     setMutating(`agent:${agentId}`);
     setMembershipError(null);
     try {
+      const previous = agents.find((a) => a.id === agentId);
       const updated = await apiFetch<AgentLite>(`/api/agents/${agentId}`, {
         method: "PATCH",
         body: JSON.stringify({ currentProjectId: null }),
       });
       setAgents((prev) => prev.map((a) => (a.id === agentId ? updated : a)));
+      if (previous?.currentProjectId) {
+        const projectName =
+          projects.find((p) => p.id === previous.currentProjectId)?.name ??
+          previous.currentProjectId;
+        void logActivity({
+          event_type: "status_change",
+          title: `Agent unassigned: ${updated.name}`,
+          description: `<- project ${projectName}`,
+          project_id: previous.currentProjectId,
+          metadata: { agentId: updated.id, agentName: updated.name },
+        });
+      }
     } catch (err) {
       setMembershipError(
         err instanceof Error ? err.message : "Failed to unassign agent"
@@ -199,6 +228,14 @@ export default function ProjectsPage() {
       setEmployees((prev) =>
         prev.map((e) => (e.id === employeeId ? updated : e))
       );
+      const projectName = projects.find((p) => p.id === projectId)?.name ?? projectId;
+      void logActivity({
+        event_type: "status_change",
+        title: `Employee assigned: ${updated.name}`,
+        description: `-> project ${projectName}`,
+        project_id: projectId,
+        metadata: { employeeId: updated.id, employeeName: updated.name },
+      });
       setEmployeeToAssign((prev) => ({ ...prev, [projectId]: "" }));
     } catch (err) {
       setMembershipError(
@@ -229,6 +266,14 @@ export default function ProjectsPage() {
       setEmployees((prev) =>
         prev.map((e) => (e.id === employeeId ? updated : e))
       );
+      const projectName = projects.find((p) => p.id === projectId)?.name ?? projectId;
+      void logActivity({
+        event_type: "status_change",
+        title: `Employee unassigned: ${updated.name}`,
+        description: `<- project ${projectName}`,
+        project_id: projectId,
+        metadata: { employeeId: updated.id, employeeName: updated.name },
+      });
     } catch (err) {
       setMembershipError(
         err instanceof Error ? err.message : "Failed to unassign employee"

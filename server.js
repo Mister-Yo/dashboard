@@ -245,6 +245,10 @@ const server = http.createServer(async (req, res) => {
   if (matchPath(method, pathname, { method: "GET", path: "/health" })) {
     return sendJson(res, 200, { status: "ok", time: nowIso() });
   }
+  // Expose health on the proxied path too (Nginx typically proxies /api/coord/*).
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/health" })) {
+    return sendJson(res, 200, { status: "ok", time: nowIso() });
+  }
 
   // ═══════════════════════════════════════════════════════
   // PUBLIC ROUTES — registration & login only
