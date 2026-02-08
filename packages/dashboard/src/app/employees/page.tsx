@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Employee {
   id: string;
@@ -18,6 +20,14 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [email, setEmail] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -58,6 +68,51 @@ export default function EmployeesPage() {
     );
   }
 
+  async function handleCreate() {
+    setSubmitting(true);
+    setFormError(null);
+    setApiKey(null);
+    setCopied(false);
+    try {
+      const created = await apiFetch<Employee>("/api/employees", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          role,
+          email: email || null,
+          telegramUsername: telegram || null,
+        }),
+      });
+      setEmployees((prev) => [created, ...prev]);
+
+      const keyResult = await apiFetch<{ apiKey: string }>(
+        `/api/employees/${created.id}/api-key`,
+        { method: "POST" }
+      );
+      setApiKey(keyResult.apiKey);
+
+      setName("");
+      setRole("");
+      setEmail("");
+      setTelegram("");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to create");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleCopy() {
+    if (!apiKey) return;
+    try {
+      await navigator.clipboard.writeText(apiKey);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -79,6 +134,61 @@ export default function EmployeesPage() {
           </span>
         </div>
       </header>
+
+      <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Create
+            </p>
+            <h2 className="text-lg font-semibold">New Employee</h2>
+          </div>
+          <Button onClick={handleCreate} disabled={submitting || !name || !role}>
+            {submitting ? "Creating..." : "Create employee"}
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            placeholder="Full name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Input
+            placeholder="Role"
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+          />
+          <Input
+            placeholder="Email (optional)"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+          <Input
+            placeholder="Telegram username (optional)"
+            value={telegram}
+            onChange={(event) => setTelegram(event.target.value)}
+          />
+        </div>
+        {apiKey && (
+          <div className="mt-4 rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              API Key (show once)
+            </p>
+            <p className="text-sm mt-2 break-all">{apiKey}</p>
+            <div className="mt-3 flex items-center gap-2">
+              <Button onClick={handleCopy} className="px-3 py-1 text-xs">
+                {copied ? "Copied" : "Copy key"}
+              </Button>
+              <span className="text-xs text-[var(--muted)]">
+                Save now. It will not be shown again.
+              </span>
+            </div>
+          </div>
+        )}
+        {formError && (
+          <p className="mt-3 text-sm text-red-400">{formError}</p>
+        )}
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {employees.map((employee) => (

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 interface Project {
   id: string;
@@ -20,6 +22,12 @@ export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [repo, setRepo] = useState("");
+  const [branch, setBranch] = useState("main");
 
   useEffect(() => {
     async function load() {
@@ -61,6 +69,31 @@ export default function ProjectsPage() {
     );
   }
 
+  async function handleCreate() {
+    setSubmitting(true);
+    setFormError(null);
+    try {
+      const created = await apiFetch<Project>("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({
+          name,
+          description,
+          githubRepo: repo,
+          githubBranch: branch,
+        }),
+      });
+      setProjects((prev) => [created, ...prev]);
+      setName("");
+      setDescription("");
+      setRepo("");
+      setBranch("main");
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Failed to create");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -86,6 +119,45 @@ export default function ProjectsPage() {
           </span>
         </div>
       </header>
+
+      <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Create
+            </p>
+            <h2 className="text-lg font-semibold">New Project</h2>
+          </div>
+          <Button onClick={handleCreate} disabled={submitting || !name || !repo}>
+            {submitting ? "Creating..." : "Create project"}
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <Input
+            placeholder="Project name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          <Input
+            placeholder="GitHub repo (org/name)"
+            value={repo}
+            onChange={(event) => setRepo(event.target.value)}
+          />
+          <Input
+            placeholder="Branch"
+            value={branch}
+            onChange={(event) => setBranch(event.target.value)}
+          />
+          <Input
+            placeholder="Short description"
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
+          />
+        </div>
+        {formError && (
+          <p className="mt-3 text-sm text-red-400">{formError}</p>
+        )}
+      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {projects.map((project) => (
