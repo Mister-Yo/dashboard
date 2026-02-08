@@ -6,6 +6,6 @@ services:
       repo: Mister-Yo/dashboard
       branch: main
       deploy_on_push: true
-    source_dir: /packages/coord-api
-    dockerfile_path: Dockerfile
+    source_dir: /
+    dockerfile_path: packages/coord-api/Dockerfile
     http_port: 8080
