@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface Project {
   id: string;
@@ -18,22 +19,61 @@ interface Project {
   assignedEmployeeIds: string[];
 }
 
+interface AgentLite {
+  id: string;
+  name: string;
+  status: string;
+  currentProjectId: string | null;
+}
+
+interface EmployeeLite {
+  id: string;
+  name: string;
+  role: string;
+  status: string;
+  assignedProjectIds: string[];
+}
+
+function selectClassName() {
+  return cn(
+    "w-full rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] px-4 py-3 text-sm",
+    "text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+  );
+}
+
 export default function ProjectsPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [agents, setAgents] = useState<AgentLite[]>([]);
+  const [employees, setEmployees] = useState<EmployeeLite[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [membershipError, setMembershipError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [mutating, setMutating] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [repo, setRepo] = useState("");
   const [branch, setBranch] = useState("main");
 
+  const [agentToAssign, setAgentToAssign] = useState<Record<string, string>>(
+    {}
+  );
+  const [employeeToAssign, setEmployeeToAssign] = useState<
+    Record<string, string>
+  >({});
+
   useEffect(() => {
     async function load() {
       try {
-        const data = await apiFetch<Project[]>("/api/projects");
-        setProjects(data);
+        const [p, a, e] = await Promise.all([
+          apiFetch<Project[]>("/api/projects"),
+          apiFetch<AgentLite[]>("/api/agents"),
+          apiFetch<EmployeeLite[]>("/api/employees"),
+        ]);
+        setProjects(p);
+        setAgents(a);
+        setEmployees(e);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load projects");
       } finally {
@@ -91,6 +131,109 @@ export default function ProjectsPage() {
       setFormError(err instanceof Error ? err.message : "Failed to create");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function assignAgent(projectId: string) {
+    const agentId = agentToAssign[projectId];
+    if (!agentId) return;
+    setMutating(`agent:${agentId}`);
+    setMembershipError(null);
+    try {
+      const updated = await apiFetch<AgentLite>(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ currentProjectId: projectId }),
+      });
+      setAgents((prev) => prev.map((a) => (a.id === agentId ? updated : a)));
+      setAgentToAssign((prev) => ({ ...prev, [projectId]: "" }));
+    } catch (err) {
+      setMembershipError(
+        err instanceof Error ? err.message : "Failed to assign agent"
+      );
+    } finally {
+      setMutating(null);
+    }
+  }
+
+  async function unassignAgent(agentId: string) {
+    setMutating(`agent:${agentId}`);
+    setMembershipError(null);
+    try {
+      const updated = await apiFetch<AgentLite>(`/api/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ currentProjectId: null }),
+      });
+      setAgents((prev) => prev.map((a) => (a.id === agentId ? updated : a)));
+    } catch (err) {
+      setMembershipError(
+        err instanceof Error ? err.message : "Failed to unassign agent"
+      );
+    } finally {
+      setMutating(null);
+    }
+  }
+
+  async function assignEmployee(projectId: string) {
+    const employeeId = employeeToAssign[projectId];
+    if (!employeeId) return;
+    const employee = employees.find((e) => e.id === employeeId);
+    if (!employee) return;
+    if (employee.assignedProjectIds?.includes(projectId)) {
+      setEmployeeToAssign((prev) => ({ ...prev, [projectId]: "" }));
+      return;
+    }
+
+    setMutating(`employee:${employeeId}`);
+    setMembershipError(null);
+    try {
+      const updated = await apiFetch<EmployeeLite>(
+        `/api/employees/${employeeId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            assignedProjectIds: [...(employee.assignedProjectIds ?? []), projectId],
+          }),
+        }
+      );
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === employeeId ? updated : e))
+      );
+      setEmployeeToAssign((prev) => ({ ...prev, [projectId]: "" }));
+    } catch (err) {
+      setMembershipError(
+        err instanceof Error ? err.message : "Failed to assign employee"
+      );
+    } finally {
+      setMutating(null);
+    }
+  }
+
+  async function unassignEmployee(employeeId: string, projectId: string) {
+    const employee = employees.find((e) => e.id === employeeId);
+    if (!employee) return;
+    const nextIds = (employee.assignedProjectIds ?? []).filter(
+      (id) => id !== projectId
+    );
+
+    setMutating(`employee:${employeeId}`);
+    setMembershipError(null);
+    try {
+      const updated = await apiFetch<EmployeeLite>(
+        `/api/employees/${employeeId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ assignedProjectIds: nextIds }),
+        }
+      );
+      setEmployees((prev) =>
+        prev.map((e) => (e.id === employeeId ? updated : e))
+      );
+    } catch (err) {
+      setMembershipError(
+        err instanceof Error ? err.message : "Failed to unassign employee"
+      );
+    } finally {
+      setMutating(null);
     }
   }
 
@@ -165,6 +308,9 @@ export default function ProjectsPage() {
             key={project.id}
             className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4"
           >
+            {membershipError && (
+              <p className="mb-3 text-sm text-red-400">{membershipError}</p>
+            )}
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
@@ -204,14 +350,160 @@ export default function ProjectsPage() {
               <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
                 <p className="text-[var(--muted)]">Agents</p>
                 <p className="text-sm font-medium">
-                  {project.assignedAgentIds?.length ?? 0}
+                  {agents.filter((a) => a.currentProjectId === project.id).length}
                 </p>
               </div>
               <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
                 <p className="text-[var(--muted)]">Employees</p>
                 <p className="text-sm font-medium">
-                  {project.assignedEmployeeIds?.length ?? 0}
+                  {
+                    employees.filter((e) =>
+                      e.assignedProjectIds?.includes(project.id)
+                    ).length
+                  }
                 </p>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Agents
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {agents
+                    .filter((a) => a.currentProjectId === project.id)
+                    .map((agent) => (
+                      <div
+                        key={agent.id}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-[var(--foreground)]">
+                            {agent.name}
+                          </p>
+                          <p className="text-xs text-[var(--muted)]">
+                            {agent.status}
+                          </p>
+                        </div>
+                        <Button
+                          className="px-3 py-1 text-xs"
+                          disabled={mutating === `agent:${agent.id}`}
+                          onClick={() => unassignAgent(agent.id)}
+                        >
+                          {mutating === `agent:${agent.id}` ? "..." : "Remove"}
+                        </Button>
+                      </div>
+                    ))}
+                  {agents.filter((a) => a.currentProjectId === project.id)
+                    .length === 0 && (
+                    <p className="text-sm text-[var(--muted)]">
+                      No agents assigned
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 flex items-end gap-2">
+                  <select
+                    className={selectClassName()}
+                    value={agentToAssign[project.id] ?? ""}
+                    onChange={(event) =>
+                      setAgentToAssign((prev) => ({
+                        ...prev,
+                        [project.id]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Assign idle agent...</option>
+                    {agents
+                      .filter((a) => !a.currentProjectId)
+                      .map((agent) => (
+                        <option key={agent.id} value={agent.id}>
+                          {agent.name}
+                        </option>
+                      ))}
+                  </select>
+                  <Button
+                    className="px-3 py-2 text-xs"
+                    onClick={() => assignAgent(project.id)}
+                    disabled={
+                      !agentToAssign[project.id] ||
+                      mutating?.startsWith("agent:")
+                    }
+                  >
+                    Assign
+                  </Button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  Employees
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {employees
+                    .filter((e) => e.assignedProjectIds?.includes(project.id))
+                    .map((employee) => (
+                      <div
+                        key={employee.id}
+                        className="flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <p className="text-sm font-medium text-[var(--foreground)]">
+                            {employee.name}
+                          </p>
+                          <p className="text-xs text-[var(--muted)]">
+                            {employee.role}
+                          </p>
+                        </div>
+                        <Button
+                          className="px-3 py-1 text-xs"
+                          disabled={mutating === `employee:${employee.id}`}
+                          onClick={() =>
+                            unassignEmployee(employee.id, project.id)
+                          }
+                        >
+                          {mutating === `employee:${employee.id}` ? "..." : "Remove"}
+                        </Button>
+                      </div>
+                    ))}
+                  {employees.filter((e) => e.assignedProjectIds?.includes(project.id))
+                    .length === 0 && (
+                    <p className="text-sm text-[var(--muted)]">
+                      No employees assigned
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 flex items-end gap-2">
+                  <select
+                    className={selectClassName()}
+                    value={employeeToAssign[project.id] ?? ""}
+                    onChange={(event) =>
+                      setEmployeeToAssign((prev) => ({
+                        ...prev,
+                        [project.id]: event.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">Assign employee...</option>
+                    {employees.map((employee) => (
+                      <option key={employee.id} value={employee.id}>
+                        {employee.name}
+                      </option>
+                    ))}
+                  </select>
+                  <Button
+                    className="px-3 py-2 text-xs"
+                    onClick={() => assignEmployee(project.id)}
+                    disabled={
+                      !employeeToAssign[project.id] ||
+                      mutating?.startsWith("employee:")
+                    }
+                  >
+                    Assign
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
