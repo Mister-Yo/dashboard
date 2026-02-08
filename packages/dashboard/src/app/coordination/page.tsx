@@ -52,6 +52,16 @@ function messageText(payload: Message["payload"]) {
   return JSON.stringify(payload);
 }
 
+function initialsFor(value: string | null | undefined) {
+  if (!value) return "??";
+  const cleaned = value.trim();
+  if (!cleaned) return "??";
+  const parts = cleaned.split(/\s+/);
+  const first = parts[0]?.[0] ?? cleaned[0];
+  const second = parts[1]?.[0] ?? cleaned[1] ?? "";
+  return `${first}${second}`.toUpperCase();
+}
+
 export default function CoordinationPage() {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -132,7 +142,8 @@ export default function CoordinationPage() {
     [threads, activeThreadId]
   );
 
-  const identityName = auth?.name ?? auth?.owner_id ?? "you";
+  const identityName = auth?.name ?? auth?.owner_id ?? "You";
+  const identityId = auth?.owner_id ?? "";
 
   async function sendMessage() {
     if (!activeThreadId || !draft.trim()) return;
@@ -184,11 +195,11 @@ export default function CoordinationPage() {
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[280px,1fr] min-h-[calc(100vh-4rem)]">
-      <aside className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-4">
-        <div className="flex items-center justify-between mb-4">
+    <div className="grid gap-6 xl:grid-cols-[300px,1fr] min-h-[calc(100vh-4rem)]">
+      <aside className="rounded-3xl border border-[var(--card-border)] bg-[var(--surface)] p-4">
+        <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
               Threads
             </p>
             <h2 className="text-lg font-semibold">Coordination</h2>
@@ -201,109 +212,163 @@ export default function CoordinationPage() {
           <p className="text-sm text-[var(--muted)]">Loading threads...</p>
         ) : (
           <div className="space-y-2">
-            {threads.map((thread) => (
-              <button
-                key={thread.id}
-                onClick={() => setActiveThreadId(thread.id)}
-                className={cn(
-                  "w-full text-left rounded-xl border px-3 py-3 transition",
-                  thread.id === activeThreadId
-                    ? "border-transparent bg-[var(--accent)] text-[var(--accent-foreground)]"
-                    : "border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:border-[var(--accent)]"
-                )}
-              >
-                <p className="text-sm font-medium leading-snug">
-                  {thread.title || "Untitled thread"}
-                </p>
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  {thread.thread_type} · {formatTime(thread.created_at)}
-                </p>
-              </button>
-            ))}
+            {threads.map((thread) => {
+              const label = thread.title || "Untitled thread";
+              const isActive = thread.id === activeThreadId;
+              return (
+                <button
+                  key={thread.id}
+                  onClick={() => setActiveThreadId(thread.id)}
+                  className={cn(
+                    "w-full text-left rounded-2xl border px-3 py-3 transition",
+                    isActive
+                      ? "border-transparent bg-[var(--accent)] text-[var(--accent-foreground)]"
+                      : "border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:border-[var(--accent)]"
+                  )}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={cn(
+                        "h-9 w-9 rounded-2xl border text-[10px] font-semibold flex items-center justify-center",
+                        isActive
+                          ? "border-transparent bg-[var(--accent-strong)] text-[var(--accent-foreground)]"
+                          : "border-[var(--card-border)] bg-[var(--surface)] text-[var(--muted)]"
+                      )}
+                    >
+                      {initialsFor(label)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold leading-snug">
+                        {label}
+                      </p>
+                      <p className="text-xs text-[var(--muted)] mt-1">
+                        {thread.thread_type} · {formatTime(thread.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         )}
       </aside>
 
-      <section className="flex flex-col rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] overflow-hidden">
-        <header className="px-6 py-4 border-b border-[var(--card-border)] flex items-center justify-between">
+      <section className="flex flex-col rounded-3xl border border-[var(--card-border)] bg-[var(--surface)] overflow-hidden">
+        <header className="px-6 py-4 border-b border-[var(--card-border)] flex items-center justify-between bg-[var(--surface-2)]/80 backdrop-blur">
           <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+            <p className="text-xs uppercase tracking-[0.25em] text-[var(--muted)]">
               Live Coordination
             </p>
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-xl font-semibold">
               {activeThread?.title ?? "Select a thread"}
             </h2>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-[var(--muted)]">Agent</p>
-            <p className="text-sm font-medium">{identityName}</p>
+          <div className="flex items-center gap-3 text-right">
+            <div className="h-10 w-10 rounded-full bg-[var(--accent)] text-[var(--accent-foreground)] flex items-center justify-center text-xs font-semibold">
+              {initialsFor(identityName)}
+            </div>
+            <div>
+              <p className="text-xs text-[var(--muted)]">Signed in as</p>
+              <p className="text-sm font-medium">{identityName}</p>
+            </div>
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-6 py-6 space-y-6">
-          {loadingMessages ? (
-            <p className="text-sm text-[var(--muted)]">Loading messages...</p>
-          ) : messages.length === 0 ? (
-            <div className="text-sm text-[var(--muted)]">
-              No messages yet. Start the conversation.
-            </div>
-          ) : (
-            messages.map((message) => {
-              const isSelf = message.sender_id === identityName;
-              return (
-                <div
-                  key={message.id}
-                  className={cn(
-                    "flex gap-3",
-                    isSelf ? "justify-end" : "justify-start"
-                  )}
-                >
-                  <div className={cn("max-w-[70%] space-y-2")}>
+        <div className="flex-1 overflow-auto px-6 py-6">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+            {loadingMessages ? (
+              <p className="text-sm text-[var(--muted)]">
+                Loading messages...
+              </p>
+            ) : messages.length === 0 ? (
+              <div className="text-sm text-[var(--muted)]">
+                No messages yet. Start the conversation.
+              </div>
+            ) : (
+              messages.map((message) => {
+                const sender = message.sender_id ?? "unknown";
+                const isSelf = Boolean(
+                  sender &&
+                    (sender === identityId || sender === identityName)
+                );
+                const content =
+                  messageText(message.payload) || "(no message content)";
+                return (
+                  <div
+                    key={message.id}
+                    className={cn(
+                      "flex w-full gap-4",
+                      isSelf ? "justify-end" : "justify-start"
+                    )}
+                  >
+                    {!isSelf && (
+                      <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-full border border-[var(--card-border)] bg-[var(--surface-2)] text-xs font-semibold text-[var(--foreground)]">
+                        {initialsFor(sender)}
+                      </div>
+                    )}
                     <div
                       className={cn(
-                        "rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-sm",
-                        isSelf
-                          ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-transparent"
-                          : "bg-[var(--card)] border-[var(--card-border)]"
+                        "flex max-w-[80%] flex-col gap-2",
+                        isSelf ? "items-end" : "items-start"
                       )}
                     >
-                      {messageText(message.payload)}
+                      <div
+                        className={cn(
+                          "rounded-2xl border px-4 py-3 text-sm leading-relaxed shadow-sm",
+                          isSelf
+                            ? "bg-[var(--accent)] text-[var(--accent-foreground)] border-transparent"
+                            : "bg-[var(--card)] border-[var(--card-border)]"
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "mb-2 flex items-center justify-between gap-4 text-[10px] uppercase tracking-[0.2em]",
+                            isSelf
+                              ? "text-[rgba(10,12,15,0.7)]"
+                              : "text-[var(--muted)]"
+                          )}
+                        >
+                          <span>{isSelf ? "You" : sender}</span>
+                          <span>{formatTime(message.created_at)}</span>
+                        </div>
+                        <p className="whitespace-pre-wrap">{content}</p>
+                      </div>
                     </div>
-                    <div
-                      className={cn(
-                        "text-xs text-[var(--muted)]",
-                        isSelf ? "text-right" : "text-left"
-                      )}
-                    >
-                      {message.sender_id ?? "unknown"} ·{" "}
-                      {formatTime(message.created_at)}
-                    </div>
+                    {isSelf && (
+                      <div className="mt-1 flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)] text-xs font-semibold text-[var(--accent-foreground)]">
+                        {initialsFor(identityName)}
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })
-          )}
+                );
+              })
+            )}
+          </div>
         </div>
 
-        <div className="border-t border-[var(--card-border)] bg-[var(--surface-2)] p-4">
-          <div className="flex items-end gap-3">
-            <Textarea
-              rows={3}
-              placeholder="Write a coordination update..."
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-            />
-            <Button
-              className="self-end"
-              onClick={sendMessage}
-              disabled={!draft.trim() || !activeThreadId}
-            >
-              Send
-            </Button>
+        <div className="border-t border-[var(--card-border)] bg-[var(--surface-2)]/80 px-6 py-4">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+            <div className="flex items-end gap-3 rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] px-3 py-3 shadow-sm">
+              <Textarea
+                rows={3}
+                placeholder="Write a coordination update..."
+                value={draft}
+                onChange={(event) => setDraft(event.target.value)}
+                className="border-none bg-transparent px-2 py-1 focus:ring-0"
+              />
+              <Button
+                className="self-end"
+                onClick={sendMessage}
+                disabled={!draft.trim() || !activeThreadId}
+              >
+                Send
+              </Button>
+            </div>
+            <p className="text-xs text-[var(--muted)]">
+              Syncs every 8 seconds. Use for check-ins, blockers, and next
+              steps.
+            </p>
           </div>
-          <p className="text-xs text-[var(--muted)] mt-2">
-            Syncs every 8 seconds. Use for check-ins, blockers, and next steps.
-          </p>
         </div>
       </section>
     </div>
