@@ -200,9 +200,15 @@ dashboard/
 | Set up API server skeleton | CLAUDE | done | high | ✅ Hono on Bun, 5 route files |
 | API key auth system | CLAUDE | done | high | ✅ Generation + middleware |
 | Telegram bot skeleton | CLAUDE | done | high | ✅ grammy with CEO commands |
-| Fix Node.js version for build | CLAUDE | in_progress | high | Need Node >= 18.18.0 |
-| Initialize Next.js dashboard | CODE | pending | high | App Router + shadcn/ui |
-| Build Board View component | CODE | pending | medium | Main CEO interface |
+| Deploy coordinator API | CLAUDE | done | high | ✅ Auth v2: register→pending→CEO activate |
+| Deploy Hono API to production | CLAUDE | done | high | ✅ Bun + Hono on port 3001, Nginx proxy |
+| Push Drizzle schema to PostgreSQL | CLAUDE | done | high | ✅ 10 tables, 12 enums created |
+| Initialize Next.js dashboard | CODE | done | high | ✅ App Router + shadcn/ui |
+| Build Board View component | CODE | done | medium | ✅ StatusPill, StatCard components |
+| Auth-aware coordination UI | CODE | done | high | ✅ Login, admin, coord.ts with auth |
+| Create forms (Project/Agent/Employee) | CODE | in_progress | high | With one-time API key display |
+| Board View: blockers/achievements/reports | CODE | pending | medium | Connect to real API data |
+| Fix Node.js version for build | CLAUDE | blocked | low | Local dev: 18.16, need >= 18.18 |
 
 ---
 
@@ -344,15 +350,18 @@ For every project repo:
 ### Endpoints
 - Dashboard: http://134.209.162.250
 - Coordinator API health: http://134.209.162.250/health
+- Dashboard API health: http://134.209.162.250/api-health
+- Dashboard API: http://134.209.162.250/api/{agents,employees,projects,tasks,knowledge}
 
 ### Server Details
 - Provider: DigitalOcean (2 vCPU, 4GB RAM, Frankfurt)
 - OS: Ubuntu 24.04
-- Stack: Node.js 22, PostgreSQL 16, Redis 7, Nginx
-- Services: `systemctl status coordinator` / `systemctl status nginx`
-- Repo on server: `/opt/dashboard/` (coordinator API)
+- Stack: Bun 1.3.9, Node.js 22, PostgreSQL 16, Redis 7, Nginx
+- Services: `systemctl status coordinator` / `systemctl status dashboard-api` / `systemctl status nginx`
+- Coordinator API: `/opt/dashboard/` (Node.js on port 8787)
+- Dashboard API: `/opt/dashboard-api/` (Bun + Hono on port 3001)
 - Web files: `/opt/dashboard-web/` (static HTML)
-- DB: `sudo -u postgres psql -d dashboard`
+- DB: `sudo -u postgres psql -d dashboard` (10 tables, 12 enums)
 
 ### SSH
 - Use SSH **keys only**. Do not store or share passwords in this repo or in chat.
@@ -409,6 +418,11 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08: DigitalOcean droplet deployed (CLAUDE) — Node 22, PostgreSQL 16, Redis 7, Nginx
 - 2026-02-08: Coordinator API live at http://134.209.162.250 (CLAUDE)
 - 2026-02-08: Web dashboard UI deployed (CLAUDE) — Board, Agents, Threads, Messages views
+- 2026-02-08: Auth v2 system (CLAUDE) — register→pending→CEO activate, JWT, API keys
+- 2026-02-08: Auth-aware dashboard UI (CODE) — login, admin, coord.ts with auth headers
+- 2026-02-08: Full Hono API deployed to production (CLAUDE) — Bun on port 3001, all CRUD endpoints live
+- 2026-02-08: PostgreSQL schema pushed (CLAUDE) — 10 tables, 12 enum types in production DB
+- 2026-02-08: Nginx routing (CLAUDE) — /api/coord/ → coordinator:8787, /api/ → dashboard-api:3001
 
 ---
 
@@ -421,4 +435,7 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-07 [CLAUDE]: Added 10 additional ideas
 - 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies. Kept both: CODE's collaboration protocol, task ownership, MVP criteria + CLAUDE's architecture, tech stack, data models, code
 - 2026-02-08 [CODE]: Added production access + coordinator usage (no secrets)
+- 2026-02-08 [CLAUDE]: Auth v2 system — register→pending→CEO activate, JWT tokens, API keys
+- 2026-02-08 [CODE]: Auth-aware coordination UI — login page, admin panel, auth headers in coord.ts
+- 2026-02-08 [CLAUDE]: Deployed full Hono API (Bun) to production — 5 CRUD routes, 10 PostgreSQL tables, Nginx proxy
 - 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard

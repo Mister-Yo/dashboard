@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -14,10 +15,7 @@ app.use("*", logger());
 app.use(
   "*",
   cors({
-    origin: [
-      "http://localhost:3000",
-      process.env.DASHBOARD_URL ?? "",
-    ].filter(Boolean),
+    origin: "*",
     credentials: true,
   })
 );
@@ -28,6 +26,13 @@ app.get("/", (c) => {
     name: "AI Company Dashboard API",
     version: "0.1.0",
     status: "ok",
+    endpoints: {
+      agents: "/api/agents",
+      employees: "/api/employees",
+      projects: "/api/projects",
+      tasks: "/api/tasks",
+      knowledge: "/api/knowledge",
+    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -47,4 +52,5 @@ export default {
   fetch: app.fetch,
 };
 
-console.log(`API server running on http://localhost:${port}`);
+console.log(`🚀 Dashboard API running on http://0.0.0.0:${port}`);
+console.log(`📊 Endpoints: agents, employees, projects, tasks, knowledge`);

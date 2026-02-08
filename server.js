@@ -124,7 +124,16 @@ function verifyJwt(token) {
 // ═══════════════════════════════════════
 
 function getAuthContext(req) {
-  const auth = req.headers.authorization || "";
+  let auth = req.headers.authorization || "";
+
+  // Support ?api_key= query parameter as fallback (for environments that block Authorization header)
+  if (!auth) {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      const qKey = url.searchParams.get("api_key");
+      if (qKey) auth = `Bearer ${qKey}`;
+    } catch(e) {}
+  }
 
   // API key (agents)
   if (auth.startsWith("Bearer ak_")) {
