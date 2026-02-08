@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Bot, Briefcase, ShieldAlert, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -184,7 +185,12 @@ export function BoardView({ projects, agents, employees }: BoardViewProps) {
                     <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                       Project
                     </p>
-                    <h3 className="text-lg font-semibold">{project.name}</h3>
+                    <Link
+                      href={`/projects/${project.id}`}
+                      className="text-lg font-semibold hover:underline underline-offset-4"
+                    >
+                      {project.name}
+                    </Link>
                   </div>
                   <StatusPill status={project.status} />
                 </div>
