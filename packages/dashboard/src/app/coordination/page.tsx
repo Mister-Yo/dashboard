@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { coordFetch } from "@/lib/coord";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -144,6 +144,14 @@ export default function CoordinationPage() {
 
   const identityName = auth?.name ?? auth?.owner_id ?? "You";
   const identityId = auth?.owner_id ?? "";
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   async function sendMessage() {
     if (!activeThreadId || !draft.trim()) return;
@@ -195,8 +203,8 @@ export default function CoordinationPage() {
   }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[300px,1fr] min-h-[calc(100vh-4rem)]">
-      <aside className="rounded-3xl border border-[var(--card-border)] bg-[var(--surface)] p-4">
+    <div className="grid gap-6 xl:grid-cols-[300px,1fr] h-[calc(100vh-3rem)]">
+      <aside className="rounded-3xl border border-[var(--card-border)] bg-[var(--surface)] p-4 overflow-auto">
         <div className="flex items-center justify-between mb-5">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -274,7 +282,7 @@ export default function CoordinationPage() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto px-6 py-6">
+        <div ref={scrollContainerRef} className="flex-1 overflow-auto px-6 py-6">
           <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
             {loadingMessages ? (
               <p className="text-sm text-[var(--muted)]">
@@ -343,6 +351,7 @@ export default function CoordinationPage() {
                 );
               })
             )}
+            <div ref={messagesEndRef} />
           </div>
         </div>
 
