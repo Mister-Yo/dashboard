@@ -1,12 +1,29 @@
 # Strategy: AI-Centric Company Management System + Personal Effectiveness Portal
 
-## Last Updated: 2026-02-07 by CLAUDE
+## Last Updated: 2026-02-08 by CLAUDE (merged CODE + CLAUDE strategies)
 
 ---
 
-## Vision
+## Purpose & Vision
 
-Построить "портал будущего" — систему управления AI-центричной компанией, где ИИ-агенты и люди работают как единая команда. Система постепенно перенимает управленческие задачи у CEO, автоматизируя рутину и предоставляя полную видимость по всем проектам, сотрудникам и агентам.
+Build a "portal of the future" for a human manager that gradually transfers
+operational tasks to AI agents. The system combines:
+1. Company management (projects, employees, agents, status, performance).
+2. Personal effectiveness (knowledge base + task capture + execution tracking).
+
+Create a single management cockpit where the CEO can see:
+- All projects and their current status, blockers, achievements, and risks.
+- All employees (human + agent), who is doing what, and performance trends.
+- A controller agent that continuously evaluates effectiveness and suggests actions.
+
+---
+
+## Operating Rules (Must Follow)
+
+- Before any deployment or new task, read this file and check changes.
+- All changes in this file must include the author tag (e.g., `[CLAUDE]`, `[CODE]`).
+- Multiple agents work under one GitHub account and coordinate via this file.
+- Each project must have its own `strategy.md` that is shared with all members.
 
 ---
 
@@ -65,20 +82,16 @@ dashboard/
 │   │       ├── db/             # Drizzle schema + migrations
 │   │       ├── middleware/     # Auth, rate-limit, logging
 │   │       └── ws/             # WebSocket handlers
-│   │
 │   ├── dashboard/              # Next.js web dashboard
 │   │   └── src/
 │   │       ├── app/            # Pages (board, projects, agents, tasks...)
 │   │       ├── components/     # UI components
 │   │       └── lib/            # API client, WS client
-│   │
 │   ├── telegram-bot/           # Telegram bot (grammy)
 │   │   └── src/
 │   │       └── handlers/       # CEO commands, employee routing, knowledge
-│   │
 │   └── shared/                 # Shared types, utils, constants
 │       └── src/types/
-│
 ├── strategy.md                 # THIS FILE — agent coordination
 ├── package.json                # Workspace root
 ├── turbo.json                  # Turborepo config
@@ -87,35 +100,60 @@ dashboard/
 
 ---
 
-## Core Entities
+## Core Data Model
 
 ### Agent
 - id, name, type (claude_code / custom / external)
-- API key (hashed), permissions, status (active/idle/working/error)
+- API key (hashed, prefix), permissions, status (active/idle/working/error)
 - Current task, current project, last heartbeat
 
 ### Employee
-- id, name, role, telegram chat ID
-- API key (optional), assigned projects, status
+- id, name, role, type (human/agent), telegram chat ID, telegram username
+- API key (optional), assigned projects, status (active/inactive)
 
 ### Project
-- id, name, description, GitHub repo URL
+- id, name, description, GitHub repo URL, branch
 - strategy.md path, status (active/paused/completed/blocked)
 - Assigned agents + employees, blockers, achievements
+
+### ProjectMember (from CODE)
+- project_id, employee_id, role
 
 ### Task
 - id, title, description, project
 - Assignee (agent/employee/CEO), delegated by
 - Status (pending/in_progress/review/completed/blocked), priority, due date
+- Parent task (for subtask hierarchies), tags
 
 ### Knowledge Entry
 - id, title, URL, content (markdown), AI summary, tags
-- Source (telegram/twitter/manual), embeddings for semantic search
+- Source (telegram/twitter/manual/agent/email), embeddings for semantic search
+
+### StatusReport (from CODE)
+- project_id, author_id, period, achievements, problems, blockers
+
+### ActivityLog (from CODE)
+- actor_id, type, payload, timestamp
 
 ### Performance Evaluation
-- Subject (agent/employee/project), period
+- Subject (agent/employee/project), period (daily/weekly/monthly)
 - Metrics: tasks completed, blocked, avg completion time, quality scores
 - AI analysis narrative, recommendations
+
+---
+
+## Core Product Scope — MVP (from CODE)
+
+### Company Management
+- Create employees (human/agent) and issue API keys
+- Create projects with description, repo URL, and docs location
+- Add members (human/agent) to projects and instantly share project strategy
+- View a large board with all projects + all employees and activity summary
+
+### Personal Effectiveness
+- Capture knowledge from Obsidian, Telegram, and Twitter/X
+- Capture tasks for the CEO and assign tasks to agents/employees
+- Store all inputs in a searchable knowledge base
 
 ---
 
@@ -129,6 +167,22 @@ dashboard/
 5. **Branch isolation**: Agents work on feature branches, never directly on main
 6. **Conflicts**: Redis-based locking (30s TTL) prevents simultaneous strategy.md edits
 
+### Idea to Execution Flow (from CODE)
+1. Idea captured and expanded into a written brief
+2. Agents discuss and agree who owns the planning step
+3. Owner produces a detailed plan and raises questions
+4. Plan is discussed and finalized
+5. Convert plan into a detailed pipeline of tasks
+6. Agents and humans claim tasks and execute
+
+### Task Ownership Rules (from CODE)
+- Every agent and person has a specialization
+- Tasks must be claimed only by matching specialization
+- Each human can assign tasks to their own agents
+- Agents may not self-assign outside specialization without approval
+- If blocked, owner posts blocker and requests help
+- Controller agent monitors coverage and reassigns when needed
+
 ### Current Agents
 | Agent | Role | Focus |
 |-------|------|-------|
@@ -141,12 +195,34 @@ dashboard/
 
 | Task | Assignee | Status | Priority | Notes |
 |------|----------|--------|----------|-------|
-| Initialize monorepo structure | CLAUDE | pending | high | Turborepo + Bun workspaces |
-| Set up database schema | CLAUDE | pending | high | PostgreSQL + Drizzle |
-| Set up API server skeleton | CLAUDE | pending | high | Hono on Bun |
+| Initialize monorepo structure | CLAUDE | done | high | ✅ Turborepo + Bun workspaces |
+| Set up database schema | CLAUDE | done | high | ✅ PostgreSQL + Drizzle, 10 tables |
+| Set up API server skeleton | CLAUDE | done | high | ✅ Hono on Bun, 5 route files |
+| API key auth system | CLAUDE | done | high | ✅ Generation + middleware |
+| Telegram bot skeleton | CLAUDE | done | high | ✅ grammy with CEO commands |
+| Fix Node.js version for build | CLAUDE | in_progress | high | Need Node >= 18.18.0 |
 | Initialize Next.js dashboard | CODE | pending | high | App Router + shadcn/ui |
 | Build Board View component | CODE | pending | medium | Main CEO interface |
-| Set up Telegram bot | CODE | pending | medium | grammy framework |
+
+---
+
+## Parallel Workstreams (from CODE)
+
+### Track A — Core Panel
+- CRUD for employees, API keys, projects, members
+- Global board with project and employee status
+- Status reports and blockers tracking
+
+### Track B — Knowledge Base
+- Telegram ingestion (bot -> KnowledgeItem)
+- Twitter/X ingestion (manual submit -> KnowledgeItem)
+- Obsidian ingestion (markdown import or vault sync)
+- Semantic search over knowledge
+
+### Track C — Controller Agent
+- Periodic activity checks and effectiveness scoring
+- Detection of stalled projects and overloaded employees
+- Actionable recommendations to the CEO
 
 ---
 
@@ -161,19 +237,20 @@ dashboard/
 - [ ] Set up Railway project for API + bot
 
 ### Phase 1: Foundation
-- [ ] Monorepo init (Turborepo + Bun workspaces)
-- [ ] Shared types package
-- [ ] API server with Hono + Drizzle + PostgreSQL
-- [ ] Database schema and migrations
-- [ ] API key generation + auth middleware
-- [ ] CRUD routes: /projects, /agents, /employees, /tasks
+- [x] Monorepo init (Turborepo + Bun workspaces) — CLAUDE
+- [x] Shared types package — CLAUDE
+- [x] API server with Hono + Drizzle + PostgreSQL — CLAUDE
+- [x] Database schema and migrations — CLAUDE
+- [x] API key generation + auth middleware — CLAUDE
+- [x] CRUD routes: /projects, /agents, /employees, /tasks, /knowledge — CLAUDE
+- [x] Telegram bot skeleton (grammy) — CLAUDE
 - [ ] Dashboard skeleton (Next.js + Tailwind + shadcn/ui)
 - [ ] Basic list views
 - [ ] Configure Vercel deploy for dashboard
 - [ ] Configure Railway deploy for API
 
 ### Phase 2: Telegram + Knowledge Base
-- [ ] Telegram bot (grammy) with CEO commands
+- [ ] Telegram bot full CEO commands
 - [ ] Knowledge ingestion (URL -> extract -> summarize -> store)
 - [ ] Obsidian vault sync
 - [ ] Knowledge base view in dashboard
@@ -208,75 +285,46 @@ dashboard/
 
 ---
 
+## MVP Acceptance Criteria (from CODE)
+
+- Create employee and issue API key (show full key only once)
+- Create project with repo URL and docs path
+- Add member to project and auto-share project `strategy.md`
+- Board shows current status, blockers, achievements
+- Telegram message appears in the knowledge base
+- Controller agent generates a weekly effectiveness report
+
+---
+
+## Integrations (from CODE)
+
+- Obsidian: knowledge ingestion (import markdown or sync from vault repo)
+- Telegram: bot for tasks + knowledge ingestion + human-agent communication
+- Twitter/X: manual sharing of posts/links into the knowledge base
+
+---
+
 ## Additional Ideas (CLAUDE)
 
-### 1. "CEO Autopilot" Mode
-Система должна уметь работать в двух режимах:
-- **Manual**: CEO принимает все решения, агенты только исполняют
-- **Autopilot**: AI Controller автономно распределяет задачи, решает мелкие блокеры, эскалирует только критичное
-Переход между режимами — через dashboard или Telegram команду `/autopilot on|off`
+1. **CEO Autopilot Mode** — Manual vs Autopilot (AI Controller auto-manages)
+2. **Morning Briefing** — Daily Telegram digest
+3. **Decision Queue** — Urgent/Important/Low priority routing
+4. **Agent Memory** — Per-agent `memory.md` for long-term learning
+5. **Onboarding Protocol** — Auto-context when joining project
+6. **Knowledge Graph** — Linked knowledge (articles↔tags↔projects↔tasks)
+7. **Escalation Chain** — Timed escalation when blocked
+8. **Project Templates** — SaaS, Landing, API, Content
+9. **Financial Tracking** — Per-project cost tracking
+10. **Multi-channel Input** — Telegram, web, email, voice, screenshots
 
-### 2. Morning Briefing
-Каждое утро CEO получает в Telegram краткий дайджест:
-- Что сделано за ночь (агенты работают 24/7)
-- Текущие блокеры
-- Задачи, требующие решения CEO
-- Метрики по проектам (прогресс %, скорость)
-- Рекомендации AI Controller
+---
 
-### 3. Decision Queue
-Не все решения требуют немедленной реакции CEO. Система ведет очередь решений:
-- **Urgent**: Push-уведомление в Telegram немедленно
-- **Important**: Включается в morning briefing
-- **Low**: Копится, показывается в dashboard на борде
+## Project Strategy Standard (from CODE)
 
-### 4. Agent Memory & Context
-Каждый агент (CLAUDE, CODE, future agents) должен иметь:
-- `memory.md` — долгосрочная память (ошибки, паттерны, предпочтения CEO)
-- Контекст текущего проекта (strategy.md + последние коммиты + открытые PR)
-- История взаимодействий с CEO и другими агентами
-
-### 5. "Onboarding Protocol" для новых агентов/сотрудников
-При добавлении в проект, система автоматически:
-1. Отправляет strategy.md проекта
-2. Отправляет краткое описание архитектуры
-3. Показывает текущие задачи и блокеры
-4. Назначает первую задачу (или предлагает CEO выбрать)
-
-### 6. Knowledge Graph
-Знания из базы знаний должны быть связаны:
-- Статья -> теги -> проекты (где эти знания применимы)
-- Статья -> задачи (которые были созданы на основе этих знаний)
-- Связи между статьями (AI определяет похожие/связанные)
-
-### 7. Escalation Chain
-Если агент заблокирован > 30 минут:
-1. Пробует решить сам (ищет в knowledge base)
-2. Запрашивает помощь у другого агента через strategy.md
-3. Эскалирует CEO через Telegram
-4. AI Controller фиксирует время блокировки для метрик
-
-### 8. Project Templates
-Для быстрого запуска проектов — шаблоны:
-- SaaS product (repo + CI/CD + monitoring + strategy.md)
-- Landing page (repo + Vercel deploy + A/B testing)
-- API service (repo + Railway deploy + docs)
-- Content project (repo + Obsidian vault + publishing pipeline)
-
-### 9. Financial Tracking (future)
-Per-project cost tracking:
-- API costs (LLM calls per agent per project)
-- Infrastructure costs (Railway/Vercel usage)
-- Human employee hours
-- ROI per project
-
-### 10. Multi-channel Input
-CEO должен иметь возможность отправлять задачи/контент через:
-- Telegram (основной)
-- Web dashboard (формы)
-- Email (forward to system)
-- Voice messages (Telegram voice -> transcription -> task/knowledge)
-- Screenshots (OCR -> knowledge base)
+For every project repo:
+- Have a `strategy.md` at repo root
+- Include project goals, scope, roles, and workflows
+- When a member joins, they receive the project strategy immediately
 
 ---
 
@@ -293,18 +341,26 @@ CEO должен иметь возможность отправлять зада
 
 ## Blockers
 
-_None currently_
+- Node.js 18.16.0 on dev machine — Next.js 15 requires >= 18.18.0. [CLAUDE, 2026-02-08]
 
 ---
 
 ## Achievements
 
-_Project initialized on 2026-02-07_
+- 2026-02-07: Project initialized
+- 2026-02-08: Monorepo structure created (CLAUDE)
+- 2026-02-08: Full API with CRUD routes (CLAUDE) — agents, employees, projects, tasks, knowledge
+- 2026-02-08: Database schema with Drizzle ORM (CLAUDE) — 10 tables
+- 2026-02-08: API key auth system (CLAUDE)
+- 2026-02-08: Telegram bot skeleton (CLAUDE)
 
 ---
 
 ## Change Log
 
-- 2026-02-07 [CLAUDE]: Created initial strategy.md with full system architecture, tech stack, implementation phases, and agent collaboration protocol
-- 2026-02-07 [CLAUDE]: Added Phase 0 (service setup), deployment target: Vercel + Railway. CEO confirmed need to set up Telegram bot and PostgreSQL
-- 2026-02-07 [CLAUDE]: Added 10 additional ideas: CEO Autopilot mode, Morning Briefing, Decision Queue, Agent Memory, Onboarding Protocol, Knowledge Graph, Escalation Chain, Project Templates, Financial Tracking, Multi-channel Input
+- 2026-02-07 [CODE]: Initial strategy draft
+- 2026-02-08 [CODE]: Added collaboration protocol and task assignment rules
+- 2026-02-07 [CLAUDE]: Created detailed strategy with architecture, tech stack, implementation phases
+- 2026-02-07 [CLAUDE]: Added Phase 0 (service setup), deployment: Vercel + Railway
+- 2026-02-07 [CLAUDE]: Added 10 additional ideas
+- 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies. Kept both: CODE's collaboration protocol, task ownership, MVP criteria + CLAUDE's architecture, tech stack, data models, code
