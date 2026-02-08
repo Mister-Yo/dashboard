@@ -66,8 +66,11 @@ export default function BoardPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function load() {
+    let timer: ReturnType<typeof setInterval> | null = null;
+
+    async function load(isInitial = false) {
       try {
+        if (isInitial) setLoading(true);
         const [p, a, e] = await Promise.all([
           apiFetch<Project[]>("/api/projects"),
           apiFetch<Agent[]>("/api/agents"),
@@ -125,13 +128,20 @@ export default function BoardPage() {
         setProjects(detailed);
         setAgents(a);
         setEmployees(e);
+        setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load data");
       } finally {
-        setLoading(false);
+        if (isInitial) setLoading(false);
       }
     }
-    load();
+
+    load(true);
+    timer = setInterval(() => load(false), 15000);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   if (loading) {
