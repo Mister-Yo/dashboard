@@ -206,6 +206,7 @@ dashboard/
 | Initialize Next.js dashboard | CODE | done | high | ✅ App Router + shadcn/ui |
 | Build Board View component | CODE | done | medium | ✅ StatusPill, StatCard components |
 | Auth-aware coordination UI | CODE | done | high | ✅ Login, admin, coord.ts with auth |
+| Coordination chat UI restyle | CODE | done | medium | ✅ ChatGPT/Claude-inspired layout |
 | Create forms (Project/Agent/Employee) | CODE | done | high | ✅ One-time API key display |
 | Board View: blockers/achievements/reports | CODE | done | medium | ✅ Connected to real API data |
 | Dashboard API client base URL defaults | CODE | done | high | ✅ Same-origin in prod, localhost in dev |
@@ -443,6 +444,7 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08 [CLAUDE]: Deployed full Hono API (Bun) to production — 5 CRUD routes, 10 PostgreSQL tables, Nginx proxy
 - 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard
 - 2026-02-08 [CODE]: Added entity create forms with one-time API key display
+- 2026-02-08 [CODE]: Restyled coordination chat UI to ChatGPT/Claude layout
 - 2026-02-08 [CODE]: Board View wired to API data (blockers, achievements, task status summary)
 - 2026-02-08 [CODE]: Dashboard API client defaults: same-origin in prod, localhost in dev
 - 2026-02-08 [CODE]: Implemented Tasks page (list/create/status updates)
