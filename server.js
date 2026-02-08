@@ -123,6 +123,27 @@ function verifyJwt(token) {
 // Auth — get identity from token
 // ═══════════════════════════════════════
 
+// Async version of getAuthContext that also checks body for api_key
+async function getAuthContextAsync(req, parsedBody) {
+  let auth = req.headers.authorization || "";
+
+  // Fallback 1: ?api_key= query parameter
+  if (!auth) {
+    try {
+      const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+      const qKey = url.searchParams.get("api_key");
+      if (qKey) auth = `Bearer ${qKey}`;
+    } catch(e) {}
+  }
+
+  // Fallback 2: api_key in JSON body (for environments that block Authorization header entirely)
+  if (!auth && parsedBody && parsedBody.api_key) {
+    auth = `Bearer ${parsedBody.api_key}`;
+  }
+
+  return _resolveAuth(auth);
+}
+
 function getAuthContext(req) {
   let auth = req.headers.authorization || "";
 
@@ -134,6 +155,11 @@ function getAuthContext(req) {
       if (qKey) auth = `Bearer ${qKey}`;
     } catch(e) {}
   }
+
+  return _resolveAuth(auth);
+}
+
+function _resolveAuth(auth) {
 
   // API key (agents)
   if (auth.startsWith("Bearer ak_")) {
@@ -173,6 +199,16 @@ function requireAuth(req, res) {
   const ctx = getAuthContext(req);
   if (!ctx) {
     sendJson(res, 401, { error: "authentication_required", message: "Please login or provide API key" });
+    return null;
+  }
+  return ctx;
+}
+
+// Async version: also checks body.api_key for POST requests
+async function requireAuthAsync(req, res, parsedBody) {
+  const ctx = await getAuthContextAsync(req, parsedBody);
+  if (!ctx) {
+    sendJson(res, 401, { error: "authentication_required", message: "Please login or provide API key. You can pass api_key in query string or request body." });
     return null;
   }
   return ctx;
@@ -403,10 +439,21 @@ const server = http.createServer(async (req, res) => {
 
   // ═══════════════════════════════════════════════════════
   // PROTECTED ROUTES — require valid auth (active user/agent)
+  // For POST requests, also check body.api_key as fallback
   // ═══════════════════════════════════════════════════════
 
-  const authCtx = requireAuth(req, res);
+  // Pre-parse body for POST to check api_key in body
+  // Also reuse this parsed body in route handlers to avoid double-read
+  let _preBody = null;
+  if (method === "POST" || method === "PATCH" || method === "PUT") {
+    try { _preBody = await parseJsonBody(req); } catch(e) {}
+  }
+
+  const authCtx = await requireAuthAsync(req, res, _preBody);
   if (!authCtx) return; // 401 already sent
+
+  // Helper: get pre-parsed body (since stream already consumed)
+  function getBody() { return _preBody || {}; }
 
   // ─── GET /api/coord/auth/me ───
   if (matchPath(method, pathname, { method: "GET", path: "/api/coord/auth/me" })) {
@@ -421,7 +468,7 @@ const server = http.createServer(async (req, res) => {
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/admin/activate" })) {
     if (!requireCeo(authCtx, res)) return;
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       if (!body.type || !body.id) {
         return sendJson(res, 400, { error: "type (agent|user) and id required" });
       }
@@ -452,7 +499,7 @@ const server = http.createServer(async (req, res) => {
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/admin/deactivate" })) {
     if (!requireCeo(authCtx, res)) return;
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       if (!body.type || !body.id) return sendJson(res, 400, { error: "type and id required" });
       const data = loadData();
       if (body.type === "agent") {
@@ -490,7 +537,7 @@ const server = http.createServer(async (req, res) => {
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/api-keys/regenerate" })) {
     if (!requireCeo(authCtx, res)) return;
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       if (!body.owner_id || !body.owner_type) return sendJson(res, 400, { error: "owner_id and owner_type required" });
       const data = loadData();
       data.api_keys.forEach(k => {
@@ -551,7 +598,7 @@ const server = http.createServer(async (req, res) => {
 
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/threads" })) {
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       const data = loadData();
       const thread = {
         id: crypto.randomUUID(),
@@ -573,7 +620,7 @@ const server = http.createServer(async (req, res) => {
   // POST /api/coord/messages — sender_id ALWAYS from token
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/messages" })) {
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       const data = loadData();
       const thread = data.threads.find(t => t.id === body.thread_id);
       if (!thread) return sendJson(res, 404, { error: "thread_not_found" });
@@ -599,7 +646,7 @@ const server = http.createServer(async (req, res) => {
   // POST /api/coord/agents/heartbeat — only the agent itself can heartbeat
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/agents/heartbeat" })) {
     try {
-      const body = await parseJsonBody(req);
+      const body = getBody();
       const agentId = body.employee_id || authCtx.owner_id;
       const data = loadData();
       const idx = data.agents.findIndex(a => a.employee_id === agentId);
