@@ -8,6 +8,14 @@ interface Project {
   name: string;
   description: string;
   status: string;
+  blockers: Array<{ id: string; description: string; severity: string }>;
+  achievements: Array<{ id: string; description: string }>;
+  taskSummary: {
+    pending: number;
+    in_progress: number;
+    blocked: number;
+    completed: number;
+  };
 }
 
 interface Agent {
@@ -162,6 +170,8 @@ export function BoardView({ projects, agents, employees }: BoardViewProps) {
             const projectEmployees = employees.filter((e) =>
               e.assignedProjectIds?.includes(project.id)
             );
+            const blockersPreview = project.blockers?.slice(0, 2) ?? [];
+            const achievementsPreview = project.achievements?.slice(0, 2) ?? [];
 
             return (
               <div
@@ -198,6 +208,49 @@ export function BoardView({ projects, agents, employees }: BoardViewProps) {
                         ? projectEmployees.map((e) => e.name).join(", ")
                         : "No assigned employees"}
                     </p>
+                  </div>
+                  <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
+                    <p className="text-xs text-[var(--muted)]">Status report</p>
+                    <p className="font-medium">
+                      {project.taskSummary?.in_progress ?? 0} active ·{" "}
+                      {project.taskSummary?.blocked ?? 0} blocked ·{" "}
+                      {project.taskSummary?.completed ?? 0} done
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 text-xs text-[var(--muted)]">
+                  <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
+                    <p className="uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Blockers
+                    </p>
+                    {blockersPreview.length === 0 ? (
+                      <p className="text-sm text-[var(--foreground)] mt-2">
+                        None reported
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1 text-sm text-[var(--foreground)]">
+                        {blockersPreview.map((blocker) => (
+                          <li key={blocker.id}>• {blocker.description}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
+                    <p className="uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Achievements
+                    </p>
+                    {achievementsPreview.length === 0 ? (
+                      <p className="text-sm text-[var(--foreground)] mt-2">
+                        None logged
+                      </p>
+                    ) : (
+                      <ul className="mt-2 space-y-1 text-sm text-[var(--foreground)]">
+                        {achievementsPreview.map((achievement) => (
+                          <li key={achievement.id}>• {achievement.description}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               </div>
