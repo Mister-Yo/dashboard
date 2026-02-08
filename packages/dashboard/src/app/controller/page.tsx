@@ -73,8 +73,14 @@ export default function ControllerPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null;
+    let inFlight = false;
+
     async function load() {
+      if (inFlight) return;
+      inFlight = true;
       try {
+        setError(null);
         const [a, e, p, t] = await Promise.all([
           apiFetch<Agent[]>("/api/agents"),
           apiFetch<Employee[]>("/api/employees"),
@@ -86,12 +92,21 @@ export default function ControllerPage() {
         setProjects(p);
         setTasks(t);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load controller data");
+        setError(
+          err instanceof Error ? err.message : "Failed to load controller data"
+        );
       } finally {
         setLoading(false);
+        inFlight = false;
       }
     }
     load();
+
+    timer = setInterval(load, 20000);
+
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, []);
 
   const agentSummary = useMemo(() => {
@@ -276,4 +291,3 @@ export default function ControllerPage() {
     </div>
   );
 }
-
