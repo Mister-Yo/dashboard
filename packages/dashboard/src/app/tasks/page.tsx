@@ -133,7 +133,7 @@ export default function TasksPage() {
       setAssigneeId((prev) => prev && prev !== "ceo" ? prev : agents[0].id);
     } else if (assigneeType === "employee" && employees.length > 0) {
       setAssigneeId((prev) => prev && prev !== "ceo" ? prev : employees[0].id);
-    } else if (assigneeType !== "ceo") {
+    } else {
       setAssigneeId("");
     }
   }, [assigneeType, agents, employees]);
