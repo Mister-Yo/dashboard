@@ -91,6 +91,24 @@ export const evaluationSubjectTypeEnum = pgEnum("evaluation_subject_type", [
   "project",
 ]);
 
+export const workStatusEnum = pgEnum("work_status", [
+  "working",
+  "idle",
+  "off",
+  "waiting",
+]);
+
+export const activityEventTypeEnum = pgEnum("activity_event_type", [
+  "start_task",
+  "finish_task",
+  "status_change",
+  "note",
+  "blocker",
+  "deploy",
+  "commit",
+  "review",
+]);
+
 // --- Tables ---
 
 export const agents = pgTable("agents", {
@@ -101,6 +119,7 @@ export const agents = pgTable("agents", {
   apiKeyPrefix: varchar("api_key_prefix", { length: 16 }).notNull(),
   permissions: jsonb("permissions").$type<string[]>().default([]),
   status: agentStatusEnum("status").default("idle").notNull(),
+  workStatus: workStatusEnum("work_status").default("idle").notNull(),
   currentTaskId: uuid("current_task_id"),
   currentProjectId: uuid("current_project_id"),
   lastHeartbeat: timestamp("last_heartbeat"),
@@ -120,6 +139,8 @@ export const employees = pgTable("employees", {
   apiKeyPrefix: varchar("api_key_prefix", { length: 16 }),
   assignedProjectIds: jsonb("assigned_project_ids").$type<string[]>().default([]),
   status: employeeStatusEnum("status").default("active").notNull(),
+  workStatus: workStatusEnum("work_status").default("idle").notNull(),
+  currentTaskDescription: text("current_task_description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -229,5 +250,19 @@ export const performanceEvaluations = pgTable("performance_evaluations", {
   }>().notNull(),
   aiAnalysis: text("ai_analysis").notNull(),
   recommendations: jsonb("recommendations").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const activityEvents = pgTable("activity_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  actorType: assigneeTypeEnum("actor_type").notNull(),
+  actorId: varchar("actor_id", { length: 255 }).notNull(),
+  actorName: varchar("actor_name", { length: 255 }).notNull(),
+  eventType: activityEventTypeEnum("event_type").notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description").default(""),
+  projectId: uuid("project_id").references(() => projects.id),
+  taskId: uuid("task_id").references(() => tasks.id),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
