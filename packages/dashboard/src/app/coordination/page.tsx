@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { coordFetch } from "@/lib/coord";
+import { logActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,8 @@ interface Thread {
   id: string;
   title: string;
   thread_type: string;
+  project_id?: string | null;
+  task_id?: string | null;
   created_at: string;
   created_by: string | null;
 }
@@ -160,10 +163,11 @@ export default function CoordinationPage() {
 
   async function sendMessage() {
     if (!activeThreadId || !draft.trim()) return;
+    const text = draft.trim();
     const payload = {
       thread_id: activeThreadId,
       message_type: "note",
-      payload: { text: draft.trim() },
+      payload: { text },
     };
 
     try {
@@ -173,6 +177,17 @@ export default function CoordinationPage() {
       });
       setMessages((prev) => [...prev, message]);
       setDraft("");
+      void logActivity({
+        event_type: "note",
+        title: `Coordination message: ${activeThread?.title ?? activeThreadId}`,
+        description: text,
+        project_id: activeThread?.project_id ?? null,
+        task_id: activeThread?.task_id ?? null,
+        metadata: {
+          threadId: activeThreadId,
+          threadType: activeThread?.thread_type,
+        },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send message");
     }
@@ -196,6 +211,14 @@ export default function CoordinationPage() {
       setNewThreadTitle("");
       setNewThreadType("general");
       setShowCreateThread(false);
+      void logActivity({
+        event_type: "note",
+        title: `Thread created: ${thread.title ?? thread.id}`,
+        description: `type=${thread.thread_type}`,
+        project_id: thread.project_id ?? null,
+        task_id: thread.task_id ?? null,
+        metadata: { threadId: thread.id, threadType: thread.thread_type },
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create thread");
     } finally {
