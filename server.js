@@ -14,14 +14,11 @@ const DATA_FILE = path.join(DATA_DIR, "coord.json");
 // ═══════════════════════════════════════
 
 function ensureDataFile() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
   if (!fs.existsSync(DATA_FILE)) {
     const initial = { threads: [], messages: [], agents: [], users: [], api_keys: [] };
     fs.writeFileSync(DATA_FILE, JSON.stringify(initial, null, 2));
   }
-  // Migrate: add missing collections
   const data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
   let changed = false;
   if (!data.users) { data.users = []; changed = true; }
@@ -31,8 +28,7 @@ function ensureDataFile() {
 
 function loadData() {
   ensureDataFile();
-  const raw = fs.readFileSync(DATA_FILE, "utf8");
-  return JSON.parse(raw);
+  return JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
 }
 
 function saveData(data) {
@@ -54,62 +50,40 @@ function parseJsonBody(req) {
     let body = "";
     req.on("data", (chunk) => {
       body += chunk.toString("utf8");
-      if (body.length > 1e6) {
-        req.destroy();
-        reject(new Error("Payload too large"));
-      }
+      if (body.length > 1e6) { req.destroy(); reject(new Error("Payload too large")); }
     });
     req.on("end", () => {
       if (!body) return resolve({});
-      try {
-        resolve(JSON.parse(body));
-      } catch (err) {
-        reject(err);
-      }
+      try { resolve(JSON.parse(body)); } catch (err) { reject(err); }
     });
   });
 }
 
-function nowIso() {
-  return new Date().toISOString();
-}
+function nowIso() { return new Date().toISOString(); }
 
 function filterByQuery(items, query, fields) {
-  return items.filter((item) => {
-    return fields.every((field) => {
-      const q = query.get(field);
-      if (!q) return true;
-      return String(item[field] || "") === q;
-    });
-  });
+  return items.filter((item) => fields.every((field) => {
+    const q = query.get(field);
+    if (!q) return true;
+    return String(item[field] || "") === q;
+  }));
+}
+
+function matchPath(method, pathname, target) {
+  return method === target.method && pathname === target.path;
 }
 
 // ═══════════════════════════════════════
-// API Key generation & validation
+// Crypto helpers
 // ═══════════════════════════════════════
 
 function generateApiKey(ownerType) {
-  const random = crypto.randomBytes(24).toString("hex");
-  return `ak_${ownerType}_${random}`;
+  return `ak_${ownerType}_${crypto.randomBytes(24).toString("hex")}`;
 }
 
 function hashApiKey(plainKey) {
   return crypto.createHash("sha256").update(plainKey).digest("hex");
 }
-
-function validateApiKey(req) {
-  const auth = req.headers.authorization || "";
-  if (!auth.startsWith("Bearer ak_")) return null;
-  const token = auth.replace("Bearer ", "");
-  const hashed = hashApiKey(token);
-  const data = loadData();
-  const keyRecord = data.api_keys.find(k => k.key_hash === hashed && k.status === "active");
-  return keyRecord || null;
-}
-
-// ═══════════════════════════════════════
-// Password hashing (PBKDF2 — no deps needed)
-// ═══════════════════════════════════════
 
 function hashPassword(password) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -119,17 +93,10 @@ function hashPassword(password) {
 
 function verifyPassword(password, stored) {
   const [salt, hash] = stored.split(":");
-  const verify = crypto.pbkdf2Sync(password, salt, 100000, 64, "sha512").toString("hex");
-  return hash === verify;
+  return hash === crypto.pbkdf2Sync(password, salt, 100000, 64, "sha512").toString("hex");
 }
 
-// ═══════════════════════════════════════
-// Simple JWT (no deps — HMAC-SHA256)
-// ═══════════════════════════════════════
-
-function base64url(str) {
-  return Buffer.from(str).toString("base64url");
-}
+function base64url(str) { return Buffer.from(str).toString("base64url"); }
 
 function createJwt(payload, expiresInHours = 72) {
   const header = { alg: "HS256", typ: "JWT" };
@@ -144,51 +111,71 @@ function verifyJwt(token) {
   try {
     const parts = token.split(".");
     if (parts.length !== 3) return null;
-    const signature = crypto.createHmac("sha256", JWT_SECRET).update(`${parts[0]}.${parts[1]}`).digest("base64url");
-    if (signature !== parts[2]) return null;
+    const sig = crypto.createHmac("sha256", JWT_SECRET).update(`${parts[0]}.${parts[1]}`).digest("base64url");
+    if (sig !== parts[2]) return null;
     const payload = JSON.parse(Buffer.from(parts[1], "base64url").toString());
     if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
     return payload;
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 // ═══════════════════════════════════════
-// Auth middleware
+// Auth — get identity from token
 // ═══════════════════════════════════════
 
 function getAuthContext(req) {
   const auth = req.headers.authorization || "";
 
-  // Try API key (for agents)
+  // API key (agents)
   if (auth.startsWith("Bearer ak_")) {
-    const keyRecord = validateApiKey(req);
-    if (keyRecord) {
-      return { type: "api_key", owner_type: keyRecord.owner_type, owner_id: keyRecord.owner_id, name: keyRecord.owner_name };
+    const token = auth.replace("Bearer ", "");
+    const hashed = hashApiKey(token);
+    const data = loadData();
+    const keyRecord = data.api_keys.find(k => k.key_hash === hashed && k.status === "active");
+    if (!keyRecord) return null;
+    // Check if agent/user is active
+    if (keyRecord.owner_type === "agent") {
+      const agent = data.agents.find(a => a.employee_id === keyRecord.owner_id);
+      if (!agent || agent.status !== "active") return null; // not activated
     }
-    return null;
+    if (keyRecord.owner_type === "user") {
+      const user = data.users.find(u => u.id === keyRecord.owner_id);
+      if (!user || user.status !== "active") return null;
+    }
+    return { type: "api_key", owner_type: keyRecord.owner_type, owner_id: keyRecord.owner_id, name: keyRecord.owner_name };
   }
 
-  // Try JWT (for users)
+  // JWT (users)
   if (auth.startsWith("Bearer ey")) {
     const payload = verifyJwt(auth.replace("Bearer ", ""));
-    if (payload) {
-      return { type: "jwt", owner_type: "user", owner_id: payload.user_id, name: payload.name, role: payload.role };
-    }
-    return null;
+    if (!payload) return null;
+    // Check user is still active
+    const data = loadData();
+    const user = data.users.find(u => u.id === payload.user_id);
+    if (!user || user.status !== "active") return null;
+    return { type: "jwt", owner_type: "user", owner_id: payload.user_id, name: payload.name, role: payload.role };
   }
 
-  // No auth — anonymous (allowed for some routes)
-  return { type: "anonymous" };
+  return null; // No auth = null (not anonymous)
 }
 
-function matchPath(method, pathname, target) {
-  return method === target.method && pathname === target.path;
+// Helper: require auth, return authCtx or send 401
+function requireAuth(req, res) {
+  const ctx = getAuthContext(req);
+  if (!ctx) {
+    sendJson(res, 401, { error: "authentication_required", message: "Please login or provide API key" });
+    return null;
+  }
+  return ctx;
 }
 
-function pathStartsWith(method, pathname, targetMethod, prefix) {
-  return method === targetMethod && pathname.startsWith(prefix);
+// Helper: require CEO role
+function requireCeo(authCtx, res) {
+  if (!authCtx || authCtx.role !== "ceo") {
+    sendJson(res, 403, { error: "forbidden", message: "Only CEO can perform this action" });
+    return false;
+  }
+  return true;
 }
 
 // ═══════════════════════════════════════
@@ -200,28 +187,25 @@ const server = http.createServer(async (req, res) => {
   const pathname = url.pathname;
   const method = req.method || "GET";
 
-  // CORS
   if (method === "OPTIONS") {
     res.writeHead(204, {
       "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
+      "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type,Authorization"
     });
     return res.end();
   }
 
-  const authCtx = getAuthContext(req);
-
-  // ─── Health ───
+  // ─── Health (public) ───
   if (matchPath(method, pathname, { method: "GET", path: "/health" })) {
     return sendJson(res, 200, { status: "ok", time: nowIso() });
   }
 
-  // ═══════════════════════════════════════
-  // USER AUTH ROUTES (public)
-  // ═══════════════════════════════════════
+  // ═══════════════════════════════════════════════════════
+  // PUBLIC ROUTES — registration & login only
+  // ═══════════════════════════════════════════════════════
 
-  // POST /api/coord/users/register
+  // POST /api/coord/users/register — creates user with status "pending"
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/users/register" })) {
     try {
       const body = await parseJsonBody(req);
@@ -232,23 +216,25 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "password must be at least 6 characters" });
       }
       const data = loadData();
-      const existing = data.users.find(u => u.email === body.email);
-      if (existing) {
+      if (data.users.find(u => u.email === body.email)) {
         return sendJson(res, 409, { error: "email_already_registered" });
       }
+
+      // First user ever becomes CEO and is auto-activated
+      const isFirstUser = data.users.length === 0;
 
       const user = {
         id: crypto.randomUUID(),
         email: body.email,
         name: body.name,
-        role: body.role || "employee",
+        role: isFirstUser ? "ceo" : (body.role || "employee"),
         password_hash: hashPassword(body.password),
-        status: "active",
+        status: isFirstUser ? "active" : "pending",  // ← pending until CEO activates
         created_at: nowIso(),
         updated_at: nowIso()
       };
 
-      // Generate API key for user too
+      // Generate API key (will only work after activation)
       const plainKey = generateApiKey("user");
       const keyRecord = {
         id: crypto.randomUUID(),
@@ -264,22 +250,32 @@ const server = http.createServer(async (req, res) => {
       data.api_keys.push(keyRecord);
       saveData(data);
 
-      // Return JWT + API key (shown ONCE)
-      const token = createJwt({ user_id: user.id, name: user.name, email: user.email, role: user.role });
+      if (isFirstUser) {
+        // Auto-login first user (CEO)
+        const token = createJwt({ user_id: user.id, name: user.name, email: user.email, role: user.role });
+        return sendJson(res, 201, {
+          status: "ok",
+          user: { id: user.id, email: user.email, name: user.name, role: user.role, status: user.status },
+          token,
+          api_key: plainKey,
+          warning: "Save your API key now. It will NOT be shown again.",
+          message: "You are the first user — auto-assigned as CEO and activated."
+        });
+      }
 
       return sendJson(res, 201, {
-        status: "ok",
-        user: { id: user.id, email: user.email, name: user.name, role: user.role },
-        token,
+        status: "pending_activation",
+        user: { id: user.id, email: user.email, name: user.name, role: user.role, status: user.status },
         api_key: plainKey,
-        warning: "Save your API key now. It will NOT be shown again."
+        warning: "Save your API key now. It will NOT be shown again.",
+        message: "Registration successful. Your account must be activated by CEO before you can log in."
       });
     } catch (err) {
       return sendJson(res, 400, { error: "invalid_json" });
     }
   }
 
-  // POST /api/coord/users/login
+  // POST /api/coord/users/login — only active users can login
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/users/login" })) {
     try {
       const body = await parseJsonBody(req);
@@ -287,13 +283,18 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "email and password required" });
       }
       const data = loadData();
-      const user = data.users.find(u => u.email === body.email && u.status === "active");
+      const user = data.users.find(u => u.email === body.email);
       if (!user || !verifyPassword(body.password, user.password_hash)) {
         return sendJson(res, 401, { error: "invalid_credentials" });
       }
+      if (user.status === "pending") {
+        return sendJson(res, 403, { error: "account_pending", message: "Your account is pending activation by CEO." });
+      }
+      if (user.status !== "active") {
+        return sendJson(res, 403, { error: "account_inactive", message: "Your account is not active." });
+      }
 
       const token = createJwt({ user_id: user.id, name: user.name, email: user.email, role: user.role });
-
       return sendJson(res, 200, {
         status: "ok",
         user: { id: user.id, email: user.email, name: user.name, role: user.role },
@@ -304,20 +305,7 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // GET /api/coord/users
-  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/users" })) {
-    const data = loadData();
-    const users = data.users.map(u => ({
-      id: u.id, email: u.email, name: u.name, role: u.role, status: u.status, created_at: u.created_at
-    }));
-    return sendJson(res, 200, users);
-  }
-
-  // ═══════════════════════════════════════
-  // AGENT ROUTES
-  // ═══════════════════════════════════════
-
-  // POST /api/coord/agents/register — now generates API key
+  // POST /api/coord/agents/register — creates agent with status "pending"
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/agents/register" })) {
     try {
       const body = await parseJsonBody(req);
@@ -325,7 +313,7 @@ const server = http.createServer(async (req, res) => {
         return sendJson(res, 400, { error: "employee_id_required" });
       }
       const data = loadData();
-      const existing = data.agents.find((a) => a.employee_id === body.employee_id);
+      const existing = data.agents.find(a => a.employee_id === body.employee_id);
 
       const agent = {
         employee_id: body.employee_id,
@@ -334,7 +322,7 @@ const server = http.createServer(async (req, res) => {
         specialization_codes: body.specialization_codes || [],
         capabilities: body.capabilities || {},
         owner_employee_id: body.owner_employee_id || null,
-        status: body.status || "active",
+        status: existing ? existing.status : "pending",  // ← pending until CEO activates
         last_heartbeat_at: nowIso(),
         updated_at: nowIso(),
         created_at: existing ? existing.created_at : nowIso()
@@ -343,12 +331,11 @@ const server = http.createServer(async (req, res) => {
       let plainKey = null;
 
       if (existing) {
-        const idx = data.agents.findIndex((a) => a.employee_id === body.employee_id);
+        const idx = data.agents.findIndex(a => a.employee_id === body.employee_id);
         data.agents[idx] = agent;
       } else {
-        // NEW agent — generate API key
         plainKey = generateApiKey("agent");
-        const keyRecord = {
+        data.api_keys.push({
           id: crypto.randomUUID(),
           key_hash: hashApiKey(plainKey),
           owner_type: "agent",
@@ -356,17 +343,17 @@ const server = http.createServer(async (req, res) => {
           owner_name: body.name || body.employee_id,
           status: "active",
           created_at: nowIso()
-        };
-        data.api_keys.push(keyRecord);
+        });
         data.agents.push(agent);
       }
 
       saveData(data);
 
-      const response = { status: "ok", agent };
+      const response = { status: existing ? "updated" : "pending_activation", agent };
       if (plainKey) {
         response.api_key = plainKey;
         response.warning = "Save your API key now. It will NOT be shown again.";
+        response.message = "Agent registered. Must be activated by CEO before it can use the API.";
       }
       return sendJson(res, 200, response);
     } catch (err) {
@@ -374,59 +361,134 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // POST /api/coord/agents/heartbeat
-  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/agents/heartbeat" })) {
+  // POST /api/coord/api-keys/validate — public (so agents can check if key works)
+  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/api-keys/validate" })) {
     try {
       const body = await parseJsonBody(req);
-      if (!body.employee_id) {
-        return sendJson(res, 400, { error: "employee_id_required" });
-      }
+      if (!body.api_key) return sendJson(res, 400, { error: "api_key required" });
+      const hashed = hashApiKey(body.api_key);
       const data = loadData();
-      const idx = data.agents.findIndex((a) => a.employee_id === body.employee_id);
-      if (idx === -1) {
-        return sendJson(res, 404, { error: "agent_not_found" });
+      const keyRecord = data.api_keys.find(k => k.key_hash === hashed && k.status === "active");
+      if (!keyRecord) return sendJson(res, 401, { error: "invalid_or_revoked_key" });
+      // Check if owner is active
+      let ownerStatus = "unknown";
+      if (keyRecord.owner_type === "agent") {
+        const a = data.agents.find(a => a.employee_id === keyRecord.owner_id);
+        ownerStatus = a ? a.status : "not_found";
+      } else {
+        const u = data.users.find(u => u.id === keyRecord.owner_id);
+        ownerStatus = u ? u.status : "not_found";
       }
-      data.agents[idx].status = body.status || data.agents[idx].status || "active";
-      data.agents[idx].last_heartbeat_at = nowIso();
-      data.agents[idx].updated_at = nowIso();
-      saveData(data);
-      return sendJson(res, 200, { status: "ok", next_heartbeat_sec: 60 });
+      return sendJson(res, 200, {
+        status: "ok",
+        owner_type: keyRecord.owner_type,
+        owner_id: keyRecord.owner_id,
+        owner_name: keyRecord.owner_name,
+        owner_status: ownerStatus,
+        can_use_api: ownerStatus === "active"
+      });
     } catch (err) {
       return sendJson(res, 400, { error: "invalid_json" });
     }
   }
 
-  // GET /api/coord/agents
-  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/agents" })) {
-    const data = loadData();
-    const agents = filterByQuery(data.agents, url.searchParams, [
-      "status",
-      "owner_employee_id"
-    ]);
-    return sendJson(res, 200, agents);
+  // ═══════════════════════════════════════════════════════
+  // PROTECTED ROUTES — require valid auth (active user/agent)
+  // ═══════════════════════════════════════════════════════
+
+  const authCtx = requireAuth(req, res);
+  if (!authCtx) return; // 401 already sent
+
+  // ─── GET /api/coord/auth/me ───
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/auth/me" })) {
+    return sendJson(res, 200, authCtx);
   }
 
   // ═══════════════════════════════════════
-  // API KEY MANAGEMENT
+  // CEO-ONLY: Activation & management
   // ═══════════════════════════════════════
 
-  // POST /api/coord/api-keys/regenerate — regenerate API key for agent/user
-  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/api-keys/regenerate" })) {
+  // POST /api/coord/admin/activate — CEO activates agent or user
+  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/admin/activate" })) {
+    if (!requireCeo(authCtx, res)) return;
     try {
       const body = await parseJsonBody(req);
-      if (!body.owner_id || !body.owner_type) {
-        return sendJson(res, 400, { error: "owner_id and owner_type required" });
+      if (!body.type || !body.id) {
+        return sendJson(res, 400, { error: "type (agent|user) and id required" });
       }
       const data = loadData();
-      // Revoke old keys
+      if (body.type === "agent") {
+        const idx = data.agents.findIndex(a => a.employee_id === body.id);
+        if (idx === -1) return sendJson(res, 404, { error: "agent_not_found" });
+        data.agents[idx].status = "active";
+        data.agents[idx].updated_at = nowIso();
+        saveData(data);
+        return sendJson(res, 200, { status: "ok", message: `Agent ${data.agents[idx].name || body.id} activated`, agent: data.agents[idx] });
+      }
+      if (body.type === "user") {
+        const idx = data.users.findIndex(u => u.id === body.id || u.email === body.id);
+        if (idx === -1) return sendJson(res, 404, { error: "user_not_found" });
+        data.users[idx].status = "active";
+        data.users[idx].updated_at = nowIso();
+        saveData(data);
+        return sendJson(res, 200, { status: "ok", message: `User ${data.users[idx].name} activated`, user: { id: data.users[idx].id, name: data.users[idx].name, email: data.users[idx].email, role: data.users[idx].role, status: data.users[idx].status } });
+      }
+      return sendJson(res, 400, { error: "type must be 'agent' or 'user'" });
+    } catch (err) {
+      return sendJson(res, 400, { error: "invalid_json" });
+    }
+  }
+
+  // POST /api/coord/admin/deactivate — CEO deactivates agent or user
+  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/admin/deactivate" })) {
+    if (!requireCeo(authCtx, res)) return;
+    try {
+      const body = await parseJsonBody(req);
+      if (!body.type || !body.id) return sendJson(res, 400, { error: "type and id required" });
+      const data = loadData();
+      if (body.type === "agent") {
+        const idx = data.agents.findIndex(a => a.employee_id === body.id);
+        if (idx === -1) return sendJson(res, 404, { error: "agent_not_found" });
+        data.agents[idx].status = "inactive";
+        data.agents[idx].updated_at = nowIso();
+        saveData(data);
+        return sendJson(res, 200, { status: "ok", message: `Agent ${body.id} deactivated` });
+      }
+      if (body.type === "user") {
+        const idx = data.users.findIndex(u => u.id === body.id || u.email === body.id);
+        if (idx === -1) return sendJson(res, 404, { error: "user_not_found" });
+        data.users[idx].status = "inactive";
+        data.users[idx].updated_at = nowIso();
+        saveData(data);
+        return sendJson(res, 200, { status: "ok", message: `User ${body.id} deactivated` });
+      }
+      return sendJson(res, 400, { error: "type must be 'agent' or 'user'" });
+    } catch (err) {
+      return sendJson(res, 400, { error: "invalid_json" });
+    }
+  }
+
+  // GET /api/coord/admin/pending — list all pending registrations (CEO only)
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/admin/pending" })) {
+    if (!requireCeo(authCtx, res)) return;
+    const data = loadData();
+    const pendingAgents = data.agents.filter(a => a.status === "pending").map(a => ({ type: "agent", id: a.employee_id, name: a.name, specializations: a.specialization_codes, created_at: a.created_at }));
+    const pendingUsers = data.users.filter(u => u.status === "pending").map(u => ({ type: "user", id: u.id, name: u.name, email: u.email, role: u.role, created_at: u.created_at }));
+    return sendJson(res, 200, { pending: [...pendingAgents, ...pendingUsers] });
+  }
+
+  // POST /api/coord/api-keys/regenerate — CEO only
+  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/api-keys/regenerate" })) {
+    if (!requireCeo(authCtx, res)) return;
+    try {
+      const body = await parseJsonBody(req);
+      if (!body.owner_id || !body.owner_type) return sendJson(res, 400, { error: "owner_id and owner_type required" });
+      const data = loadData();
       data.api_keys.forEach(k => {
-        if (k.owner_id === body.owner_id && k.owner_type === body.owner_type) {
-          k.status = "revoked";
-        }
+        if (k.owner_id === body.owner_id && k.owner_type === body.owner_type) k.status = "revoked";
       });
-      // Generate new
       const plainKey = generateApiKey(body.owner_type);
-      const keyRecord = {
+      data.api_keys.push({
         id: crypto.randomUUID(),
         key_hash: hashApiKey(plainKey),
         owner_type: body.owner_type,
@@ -434,45 +496,48 @@ const server = http.createServer(async (req, res) => {
         owner_name: body.owner_name || body.owner_id,
         status: "active",
         created_at: nowIso()
-      };
-      data.api_keys.push(keyRecord);
+      });
       saveData(data);
-      return sendJson(res, 200, {
-        status: "ok",
-        api_key: plainKey,
-        warning: "Save your API key now. It will NOT be shown again."
-      });
-    } catch (err) {
-      return sendJson(res, 400, { error: "invalid_json" });
-    }
-  }
-
-  // POST /api/coord/api-keys/validate — check if API key is valid
-  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/api-keys/validate" })) {
-    try {
-      const body = await parseJsonBody(req);
-      if (!body.api_key) {
-        return sendJson(res, 400, { error: "api_key required" });
-      }
-      const hashed = hashApiKey(body.api_key);
-      const data = loadData();
-      const keyRecord = data.api_keys.find(k => k.key_hash === hashed && k.status === "active");
-      if (!keyRecord) {
-        return sendJson(res, 401, { error: "invalid_or_revoked_key" });
-      }
-      return sendJson(res, 200, {
-        status: "ok",
-        owner_type: keyRecord.owner_type,
-        owner_id: keyRecord.owner_id,
-        owner_name: keyRecord.owner_name
-      });
+      return sendJson(res, 200, { status: "ok", api_key: plainKey, warning: "Save now. Won't be shown again." });
     } catch (err) {
       return sendJson(res, 400, { error: "invalid_json" });
     }
   }
 
   // ═══════════════════════════════════════
-  // THREAD ROUTES
+  // GET routes — authenticated users can read
+  // ═══════════════════════════════════════
+
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/users" })) {
+    const data = loadData();
+    return sendJson(res, 200, data.users.map(u => ({
+      id: u.id, email: u.email, name: u.name, role: u.role, status: u.status, created_at: u.created_at
+    })));
+  }
+
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/agents" })) {
+    const data = loadData();
+    return sendJson(res, 200, filterByQuery(data.agents, url.searchParams, ["status", "owner_employee_id"]));
+  }
+
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/threads" })) {
+    const data = loadData();
+    return sendJson(res, 200, filterByQuery(data.threads, url.searchParams, ["project_id", "task_id", "thread_type", "created_by"]));
+  }
+
+  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/messages" })) {
+    const data = loadData();
+    let messages = filterByQuery(data.messages, url.searchParams, ["thread_id", "sender_id", "message_type"]);
+    const since = url.searchParams.get("since");
+    if (since) {
+      const sinceTime = new Date(since).getTime();
+      if (!Number.isNaN(sinceTime)) messages = messages.filter(m => new Date(m.created_at).getTime() >= sinceTime);
+    }
+    return sendJson(res, 200, messages);
+  }
+
+  // ═══════════════════════════════════════
+  // WRITE routes — sender auto-detected from token
   // ═══════════════════════════════════════
 
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/threads" })) {
@@ -485,7 +550,7 @@ const server = http.createServer(async (req, res) => {
         task_id: body.task_id || null,
         thread_type: body.thread_type || "general",
         title: body.title || null,
-        created_by: body.created_by || null,
+        created_by: authCtx.name,  // ← from token, not request body
         created_at: nowIso()
       };
       data.threads.push(thread);
@@ -496,33 +561,19 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/threads" })) {
-    const data = loadData();
-    const threads = filterByQuery(data.threads, url.searchParams, [
-      "project_id",
-      "task_id",
-      "thread_type",
-      "created_by"
-    ]);
-    return sendJson(res, 200, threads);
-  }
-
-  // ═══════════════════════════════════════
-  // MESSAGE ROUTES
-  // ═══════════════════════════════════════
-
+  // POST /api/coord/messages — sender_id ALWAYS from token
   if (matchPath(method, pathname, { method: "POST", path: "/api/coord/messages" })) {
     try {
       const body = await parseJsonBody(req);
       const data = loadData();
-      const exists = data.threads.find((t) => t.id === body.thread_id);
-      if (!exists) {
-        return sendJson(res, 404, { error: "thread_not_found" });
-      }
+      const thread = data.threads.find(t => t.id === body.thread_id);
+      if (!thread) return sendJson(res, 404, { error: "thread_not_found" });
+
       const message = {
         id: crypto.randomUUID(),
         thread_id: body.thread_id,
-        sender_id: body.sender_id || (authCtx ? authCtx.name || authCtx.owner_id : null),
+        sender_id: authCtx.name,          // ← ALWAYS from token
+        sender_type: authCtx.owner_type,   // "user" or "agent"
         message_type: body.message_type || "note",
         payload: body.payload || {},
         reply_to: body.reply_to || null,
@@ -536,33 +587,22 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/messages" })) {
-    const data = loadData();
-    let messages = filterByQuery(data.messages, url.searchParams, [
-      "thread_id",
-      "sender_id",
-      "message_type"
-    ]);
-    const since = url.searchParams.get("since");
-    if (since) {
-      const sinceTime = new Date(since).getTime();
-      if (!Number.isNaN(sinceTime)) {
-        messages = messages.filter((m) => new Date(m.created_at).getTime() >= sinceTime);
-      }
+  // POST /api/coord/agents/heartbeat — only the agent itself can heartbeat
+  if (matchPath(method, pathname, { method: "POST", path: "/api/coord/agents/heartbeat" })) {
+    try {
+      const body = await parseJsonBody(req);
+      const agentId = body.employee_id || authCtx.owner_id;
+      const data = loadData();
+      const idx = data.agents.findIndex(a => a.employee_id === agentId);
+      if (idx === -1) return sendJson(res, 404, { error: "agent_not_found" });
+      data.agents[idx].status = body.status || data.agents[idx].status || "active";
+      data.agents[idx].last_heartbeat_at = nowIso();
+      data.agents[idx].updated_at = nowIso();
+      saveData(data);
+      return sendJson(res, 200, { status: "ok", next_heartbeat_sec: 60 });
+    } catch (err) {
+      return sendJson(res, 400, { error: "invalid_json" });
     }
-    return sendJson(res, 200, messages);
-  }
-
-  // ═══════════════════════════════════════
-  // AUTH INFO ROUTE
-  // ═══════════════════════════════════════
-
-  // GET /api/coord/auth/me — who am I?
-  if (matchPath(method, pathname, { method: "GET", path: "/api/coord/auth/me" })) {
-    if (!authCtx || authCtx.type === "anonymous") {
-      return sendJson(res, 401, { error: "not_authenticated" });
-    }
-    return sendJson(res, 200, authCtx);
   }
 
   return sendJson(res, 404, { error: "not_found" });
@@ -570,5 +610,6 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`Coordinator API listening on http://localhost:${PORT}`);
-  console.log(`Auth: API keys for agents, JWT for users`);
+  console.log(`Auth model: register → pending → CEO activates → active`);
+  console.log(`Writes require auth. Sender auto-detected from token.`);
 });
