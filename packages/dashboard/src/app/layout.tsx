@@ -1,6 +1,19 @@
 import type { Metadata } from "next";
+import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
+
+const space = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "AI Company Dashboard",
@@ -14,7 +27,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="flex min-h-screen">
+      <body
+        className={`${space.variable} ${jetbrains.variable} flex min-h-screen bg-[var(--background)] text-[var(--foreground)]`}
+      >
         <Sidebar />
         <main className="flex-1 p-6 overflow-auto">{children}</main>
       </body>

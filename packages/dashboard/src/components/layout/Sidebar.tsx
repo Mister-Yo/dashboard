@@ -5,22 +5,23 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
   { href: "/", label: "Board", icon: "◻" },
-  { href: "/projects", label: "Projects", icon: "📁" },
-  { href: "/agents", label: "Agents", icon: "🤖" },
-  { href: "/employees", label: "Employees", icon: "👤" },
+  { href: "/coordination", label: "Coordination", icon: "✶" },
+  { href: "/projects", label: "Projects", icon: "⌂" },
+  { href: "/agents", label: "Agents", icon: "◎" },
+  { href: "/employees", label: "Employees", icon: "◈" },
   { href: "/tasks", label: "Tasks", icon: "✓" },
-  { href: "/knowledge", label: "Knowledge", icon: "📚" },
-  { href: "/controller", label: "AI Controller", icon: "📊" },
+  { href: "/knowledge", label: "Knowledge", icon: "▦" },
+  { href: "/controller", label: "AI Controller", icon: "▣" },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-56 border-r border-[var(--card-border)] bg-[var(--card)] flex flex-col">
-      <div className="p-4 border-b border-[var(--card-border)]">
-        <h1 className="text-lg font-bold">AI Dashboard</h1>
-        <p className="text-xs text-[var(--muted)]">Company Management</p>
+    <aside className="w-60 border-r border-[var(--card-border)] bg-[var(--surface)] flex flex-col">
+      <div className="p-5 border-b border-[var(--card-border)]">
+        <h1 className="text-lg font-semibold tracking-wide">AI Command</h1>
+        <p className="text-xs text-[var(--muted)]">Company + Agent Ops</p>
       </div>
       <nav className="flex-1 p-2">
         {navItems.map((item) => {
@@ -33,13 +34,13 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm mb-1 transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm mb-1 transition-colors ${
                 isActive
-                  ? "bg-[var(--primary)] text-white"
+                  ? "bg-[var(--accent)] text-[var(--accent-foreground)]"
                   : "text-[var(--muted)] hover:text-[var(--foreground)] hover:bg-white/5"
               }`}
             >
-              <span>{item.icon}</span>
+              <span className="text-xs">{item.icon}</span>
               <span>{item.label}</span>
             </Link>
           );
