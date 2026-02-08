@@ -207,7 +207,16 @@ dashboard/
 | Build Board View component | CODE | done | medium | ✅ StatusPill, StatCard components |
 | Auth-aware coordination UI | CODE | done | high | ✅ Login, admin, coord.ts with auth |
 | Create forms (Project/Agent/Employee) | CODE | done | high | ✅ One-time API key display |
-| Board View: blockers/achievements/reports | CODE | pending | medium | Connect to real API data |
+| Board View: blockers/achievements/reports | CODE | done | medium | ✅ Connected to /api/projects/:id + /api/tasks |
+| Tasks page (list/create/status) | CODE | done | medium | ✅ /tasks wired to /api/tasks |
+| Knowledge page (list/create/search) | CODE | done | medium | ✅ /knowledge wired to /api/knowledge |
+| Project membership management UI | CODE | done | medium | ✅ Assign/unassign agents + employees |
+| Project detail page (/projects/:id) | CODE | done | medium | ✅ Blockers, achievements, tasks in one view |
+| Thread creation UI (Coordination) | CODE | done | low | ✅ Create threads from /coordination |
+| Controller page (/controller) | CODE | done | low | ✅ Heuristics until real-time evaluation ships |
+| Board polling refresh | CODE | done | low | ✅ Auto-refresh every 15s |
+| Tasks deep-link by projectId | CODE | done | low | ✅ /tasks?projectId= prefilter + create preset |
+| Activity Monitor (work status + event stream) | CLAUDE | done | medium | ✅ /activity + /api/activity/* |
 | Fix Node.js version for build | CLAUDE | blocked | low | Local dev: 18.16, need >= 18.18 |
 
 ---
@@ -349,9 +358,9 @@ For every project repo:
 
 ### Endpoints
 - Dashboard: http://134.209.162.250
-- Coordinator API health: http://134.209.162.250/health
-- Dashboard API health: http://134.209.162.250/api-health
-- Dashboard API: http://134.209.162.250/api/{agents,employees,projects,tasks,knowledge}
+- Coordinator API health: http://134.209.162.250/api/coord/health
+- Dashboard API health: http://134.209.162.250/api/health
+- Dashboard API: http://134.209.162.250/api/{agents,employees,projects,tasks,knowledge,activity}
 
 ### Server Details
 - Provider: DigitalOcean (2 vCPU, 4GB RAM, Frankfurt)
@@ -378,26 +387,45 @@ curl -X POST http://134.209.162.250/api/coord/agents/register \
   -d '{"employee_id":"code-001","name":"CODE","specialization_codes":["frontend","ui","telegram","integrations"],"status":"active"}'
 ```
 
+### Who am I? (auth check)
+```bash
+curl -s http://134.209.162.250/api/coord/auth/me \
+  -H "Authorization: Bearer <API_KEY_OR_JWT>"
+```
+
+### List threads
+```bash
+curl -s http://134.209.162.250/api/coord/threads \
+  -H "Authorization: Bearer <API_KEY_OR_JWT>"
+```
+
 ### Create coordination thread
 ```bash
 curl -X POST http://134.209.162.250/api/coord/threads \
   -H "Content-Type: application/json" \
-  -d '{"title":"CLAUDE + CODE coordination","thread_type":"general","created_by":"CODE"}'
+  -H "Authorization: Bearer <API_KEY_OR_JWT>" \
+  -d '{"title":"CLAUDE + CODE + CEO Coordination","thread_type":"general"}'
 ```
 
 ### Post message (replace <THREAD_ID>)
 ```bash
 curl -X POST http://134.209.162.250/api/coord/messages \
   -H "Content-Type: application/json" \
-  -d '{"thread_id":"<THREAD_ID>","sender_id":"CODE","message_type":"note","payload":{"text":"CODE online. Ready to work."}}'
+  -H "Authorization: Bearer <API_KEY_OR_JWT>" \
+  -d '{"thread_id":"<THREAD_ID>","message_type":"note","payload":{"text":"CODE online. Ready to work."}}'
 ```
 
 ### Heartbeat
 ```bash
 curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <API_KEY_OR_JWT>" \
   -d '{"employee_id":"code-001","status":"active"}'
 ```
+
+### Auth header fallback (if your environment blocks Authorization)
+- For GET requests: add `?api_key=<API_KEY>` to the URL
+- For POST requests: include `"api_key":"<API_KEY>"` in the JSON body
 
 ---
 
@@ -423,6 +451,10 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08: Full Hono API deployed to production (CLAUDE) — Bun on port 3001, all CRUD endpoints live
 - 2026-02-08: PostgreSQL schema pushed (CLAUDE) — 10 tables, 12 enum types in production DB
 - 2026-02-08: Nginx routing (CLAUDE) — /api/coord/ → coordinator:8787, /api/ → dashboard-api:3001
+- 2026-02-08: Tasks + Knowledge pages wired to real API (CODE)
+- 2026-02-08: Project membership UI + per-project detail page (CODE)
+- 2026-02-08: Thread creation UI + controller page + board polling refresh (CODE)
+- 2026-02-08: Activity Monitor (CLAUDE) — work status + event stream
 
 ---
 
@@ -440,3 +472,10 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08 [CLAUDE]: Deployed full Hono API (Bun) to production — 5 CRUD routes, 10 PostgreSQL tables, Nginx proxy
 - 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard
 - 2026-02-08 [CODE]: Added entity create forms with one-time API key display
+- 2026-02-08 [CLAUDE]: Activity Monitor — /activity page + /api/activity endpoints
+- 2026-02-08 [CODE]: Board wired to blockers/achievements + task summary from API
+- 2026-02-08 [CODE]: Added Tasks + Knowledge pages wired to API
+- 2026-02-08 [CODE]: Added project membership UI (assign/unassign)
+- 2026-02-08 [CODE]: Added per-project detail page (/projects/:id)
+- 2026-02-08 [CODE]: Added thread creation UI in Coordination
+- 2026-02-08 [CODE]: Added controller page (/controller) + board polling refresh
