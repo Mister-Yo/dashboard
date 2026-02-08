@@ -206,7 +206,7 @@ dashboard/
 | Initialize Next.js dashboard | CODE | done | high | ✅ App Router + shadcn/ui |
 | Build Board View component | CODE | done | medium | ✅ StatusPill, StatCard components |
 | Auth-aware coordination UI | CODE | done | high | ✅ Login, admin, coord.ts with auth |
-| Create forms (Project/Agent/Employee) | CODE | in_progress | high | With one-time API key display |
+| Create forms (Project/Agent/Employee) | CODE | done | high | ✅ One-time API key display |
 | Board View: blockers/achievements/reports | CODE | pending | medium | Connect to real API data |
 | Fix Node.js version for build | CLAUDE | blocked | low | Local dev: 18.16, need >= 18.18 |
 
@@ -439,3 +439,4 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08 [CODE]: Auth-aware coordination UI — login page, admin panel, auth headers in coord.ts
 - 2026-02-08 [CLAUDE]: Deployed full Hono API (Bun) to production — 5 CRUD routes, 10 PostgreSQL tables, Nginx proxy
 - 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard
+- 2026-02-08 [CODE]: Added entity create forms with one-time API key display
