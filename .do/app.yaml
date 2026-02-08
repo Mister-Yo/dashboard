@@ -1,0 +1,12 @@
+name: dashboard-coordinator
+region: nyc
+services:
+  - name: coord-api
+    environment_slug: node-js
+    github:
+      repo: Mister-Yo/dashboard
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    http_port: 8080
+    run_command: node server.js
