@@ -1,0 +1,50 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
+import { logger } from "hono/logger";
+import agentsRouter from "./routes/agents";
+import employeesRouter from "./routes/employees";
+import projectsRouter from "./routes/projects";
+import tasksRouter from "./routes/tasks";
+import knowledgeRouter from "./routes/knowledge";
+
+const app = new Hono();
+
+// Middleware
+app.use("*", logger());
+app.use(
+  "*",
+  cors({
+    origin: [
+      "http://localhost:3000",
+      process.env.DASHBOARD_URL ?? "",
+    ].filter(Boolean),
+    credentials: true,
+  })
+);
+
+// Health check
+app.get("/", (c) => {
+  return c.json({
+    name: "AI Company Dashboard API",
+    version: "0.1.0",
+    status: "ok",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Routes
+app.route("/api/agents", agentsRouter);
+app.route("/api/employees", employeesRouter);
+app.route("/api/projects", projectsRouter);
+app.route("/api/tasks", tasksRouter);
+app.route("/api/knowledge", knowledgeRouter);
+
+// Start server
+const port = parseInt(process.env.API_PORT ?? "3001", 10);
+
+export default {
+  port,
+  fetch: app.fetch,
+};
+
+console.log(`API server running on http://localhost:${port}`);

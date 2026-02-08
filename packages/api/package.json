@@ -1,0 +1,26 @@
+{
+  "name": "@dashboard/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "build": "bun build src/index.ts --outdir dist --target bun",
+    "start": "bun dist/index.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@dashboard/shared": "workspace:*",
+    "hono": "^4.7.0",
+    "drizzle-orm": "^0.38.0",
+    "postgres": "^3.4.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "drizzle-kit": "^0.30.0",
+    "@types/bun": "^1.2.0"
+  }
+}
