@@ -7,6 +7,7 @@ import employeesRouter from "./routes/employees";
 import projectsRouter from "./routes/projects";
 import tasksRouter from "./routes/tasks";
 import knowledgeRouter from "./routes/knowledge";
+import activityRouter from "./routes/activity";
 
 const app = new Hono();
 
@@ -32,6 +33,8 @@ app.get("/", (c) => {
       projects: "/api/projects",
       tasks: "/api/tasks",
       knowledge: "/api/knowledge",
+      activity: "/api/activity",
+      activityStatus: "/api/activity/status",
     },
     timestamp: new Date().toISOString(),
   });
@@ -43,6 +46,7 @@ app.route("/api/employees", employeesRouter);
 app.route("/api/projects", projectsRouter);
 app.route("/api/tasks", tasksRouter);
 app.route("/api/knowledge", knowledgeRouter);
+app.route("/api/activity", activityRouter);
 
 // Start server
 const port = parseInt(process.env.API_PORT ?? "3001", 10);
@@ -53,4 +57,4 @@ export default {
 };
 
 console.log(`🚀 Dashboard API running on http://0.0.0.0:${port}`);
-console.log(`📊 Endpoints: agents, employees, projects, tasks, knowledge`);
+console.log(`📊 Endpoints: agents, employees, projects, tasks, knowledge, activity`);
