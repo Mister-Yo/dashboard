@@ -21,3 +21,7 @@ Thumbs.db
 # Build outputs
 *.tsbuildinfo
 coverage/
+
+# Coordinator data files
+data/*.json
+**/data/*.json
