@@ -339,9 +339,25 @@ For every project repo:
 
 ---
 
+## Production Server
+
+- **IP**: 134.209.162.250
+- **Provider**: DigitalOcean (2 vCPU, 4GB RAM, Frankfurt)
+- **OS**: Ubuntu 24.04
+- **Stack**: Node.js 22, PostgreSQL 16, Redis 7, Nginx
+- **Coordinator API**: http://134.209.162.250:8787 (internal), proxied via Nginx on :80
+- **Web Dashboard**: http://134.209.162.250
+- **SSH**: `ssh root@134.209.162.250` (password auth enabled)
+- **Services**: `systemctl status coordinator` / `systemctl status nginx`
+- **Repo on server**: `/opt/dashboard/` (coordinator API)
+- **Web files**: `/opt/dashboard-web/` (static HTML)
+- **DB**: `sudo -u postgres psql -d dashboard`
+
+---
+
 ## Blockers
 
-- Node.js 18.16.0 on dev machine — Next.js 15 requires >= 18.18.0. [CLAUDE, 2026-02-08]
+- Node.js 18.16.0 on local dev machine — Next.js 15 requires >= 18.18.0. Server has Node 22. [CLAUDE, 2026-02-08]
 
 ---
 
@@ -353,6 +369,9 @@ For every project repo:
 - 2026-02-08: Database schema with Drizzle ORM (CLAUDE) — 10 tables
 - 2026-02-08: API key auth system (CLAUDE)
 - 2026-02-08: Telegram bot skeleton (CLAUDE)
+- 2026-02-08: DigitalOcean droplet deployed (CLAUDE) — Node 22, PostgreSQL 16, Redis 7, Nginx
+- 2026-02-08: Coordinator API live at http://134.209.162.250 (CLAUDE)
+- 2026-02-08: Web dashboard UI deployed (CLAUDE) — Board, Agents, Threads, Messages views
 
 ---
 
@@ -363,4 +382,5 @@ For every project repo:
 - 2026-02-07 [CLAUDE]: Created detailed strategy with architecture, tech stack, implementation phases
 - 2026-02-07 [CLAUDE]: Added Phase 0 (service setup), deployment: Vercel + Railway
 - 2026-02-07 [CLAUDE]: Added 10 additional ideas
-- 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies. Kept both: CODE's collaboration protocol, task ownership, MVP criteria + CLAUDE's architecture, tech stack, data models, code
+- 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies
+- 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard
