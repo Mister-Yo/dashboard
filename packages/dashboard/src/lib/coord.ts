@@ -1,16 +1,42 @@
 const COORD_API_URL =
   process.env.NEXT_PUBLIC_COORD_API_URL ?? "http://134.209.162.250";
 
+const TOKEN_KEY = "coord_token";
+
+export function getCoordToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function setCoordToken(token: string) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearCoordToken() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(TOKEN_KEY);
+}
+
+type CoordFetchOptions = RequestInit & { auth?: boolean };
+
 export async function coordFetch<T>(
   path: string,
-  options?: RequestInit
+  options?: CoordFetchOptions
 ): Promise<T> {
+  const shouldAuth = options?.auth !== false;
+  const token = shouldAuth ? getCoordToken() : null;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   const res = await fetch(`${COORD_API_URL}${path}`, {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {

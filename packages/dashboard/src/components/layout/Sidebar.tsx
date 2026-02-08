@@ -12,6 +12,8 @@ const navItems = [
   { href: "/tasks", label: "Tasks", icon: "✓" },
   { href: "/knowledge", label: "Knowledge", icon: "▦" },
   { href: "/controller", label: "AI Controller", icon: "▣" },
+  { href: "/admin", label: "Admin", icon: "⬡" },
+  { href: "/login", label: "Login", icon: "→" },
 ];
 
 export function Sidebar() {

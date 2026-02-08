@@ -23,7 +23,13 @@ interface Message {
   created_at: string;
 }
 
-const CURRENT_SENDER = "CODE";
+interface AuthContext {
+  type: "api_key" | "jwt" | "anonymous";
+  owner_type?: string;
+  owner_id?: string;
+  name?: string;
+  role?: string;
+}
 
 function formatTime(value: string) {
   const date = new Date(value);
@@ -54,8 +60,25 @@ export default function CoordinationPage() {
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [auth, setAuth] = useState<AuthContext | null>(null);
+  const [authRequired, setAuthRequired] = useState(false);
 
   useEffect(() => {
+    async function loadAuth() {
+      try {
+        const data = await coordFetch<AuthContext>("/api/coord/auth/me");
+        setAuth(data);
+        setAuthRequired(false);
+      } catch (err) {
+        setAuth(null);
+        setAuthRequired(true);
+      }
+    }
+    loadAuth();
+  }, []);
+
+  useEffect(() => {
+    if (authRequired) return;
     async function loadThreads() {
       try {
         setLoadingThreads(true);
@@ -71,13 +94,14 @@ export default function CoordinationPage() {
       }
     }
     loadThreads();
-  }, [activeThreadId]);
+  }, [activeThreadId, authRequired]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
 
     async function loadMessages() {
       if (!activeThreadId) return;
+      if (authRequired) return;
       try {
         setLoadingMessages(true);
         const data = await coordFetch<Message[]>(
@@ -101,18 +125,19 @@ export default function CoordinationPage() {
     return () => {
       if (timer) clearInterval(timer);
     };
-  }, [activeThreadId]);
+  }, [activeThreadId, authRequired]);
 
   const activeThread = useMemo(
     () => threads.find((t) => t.id === activeThreadId) ?? null,
     [threads, activeThreadId]
   );
 
+  const identityName = auth?.name ?? auth?.owner_id ?? "you";
+
   async function sendMessage() {
     if (!activeThreadId || !draft.trim()) return;
     const payload = {
       thread_id: activeThreadId,
-      sender_id: CURRENT_SENDER,
       message_type: "note",
       payload: { text: draft.trim() },
     };
@@ -135,6 +160,24 @@ export default function CoordinationPage() {
         <div className="text-center">
           <p className="text-red-400 mb-2">Coordinator error</p>
           <p className="text-[var(--muted)] text-sm">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authRequired) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-center max-w-md">
+          <p className="text-red-400 mb-2">Authentication required</p>
+          <p className="text-[var(--muted)] text-sm">
+            Please sign in to access coordination threads.
+          </p>
+          <div className="mt-4">
+            <Button onClick={() => (window.location.href = "/login")}>
+              Go to Login
+            </Button>
+          </div>
         </div>
       </div>
     );
@@ -193,7 +236,7 @@ export default function CoordinationPage() {
           </div>
           <div className="text-right">
             <p className="text-xs text-[var(--muted)]">Agent</p>
-            <p className="text-sm font-medium">{CURRENT_SENDER}</p>
+            <p className="text-sm font-medium">{identityName}</p>
           </div>
         </header>
 
@@ -206,7 +249,7 @@ export default function CoordinationPage() {
             </div>
           ) : (
             messages.map((message) => {
-              const isSelf = message.sender_id === CURRENT_SENDER;
+              const isSelf = message.sender_id === identityName;
               return (
                 <div
                   key={message.id}
