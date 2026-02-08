@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { coordFetch } from "@/lib/coord";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Thread {
@@ -67,6 +68,10 @@ export default function CoordinationPage() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [draft, setDraft] = useState("");
+  const [showCreateThread, setShowCreateThread] = useState(false);
+  const [newThreadTitle, setNewThreadTitle] = useState("");
+  const [newThreadType, setNewThreadType] = useState("general");
+  const [creatingThread, setCreatingThread] = useState(false);
   const [loadingThreads, setLoadingThreads] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +178,31 @@ export default function CoordinationPage() {
     }
   }
 
+  async function createThread() {
+    if (!newThreadTitle.trim()) return;
+    const payload = {
+      title: newThreadTitle.trim(),
+      thread_type: newThreadType,
+    };
+
+    try {
+      setCreatingThread(true);
+      const thread = await coordFetch<Thread>("/api/coord/threads", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      setThreads((prev) => [thread, ...prev]);
+      setActiveThreadId(thread.id);
+      setNewThreadTitle("");
+      setNewThreadType("general");
+      setShowCreateThread(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create thread");
+    } finally {
+      setCreatingThread(false);
+    }
+  }
+
   if (error) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -212,10 +242,70 @@ export default function CoordinationPage() {
             </p>
             <h2 className="text-lg font-semibold">Coordination</h2>
           </div>
-          <span className="text-xs text-[var(--muted)]">
-            {threads.length}
-          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              className="h-9 w-9 rounded-full px-0"
+              onClick={() => setShowCreateThread((prev) => !prev)}
+              title="New thread"
+            >
+              +
+            </Button>
+            <span className="text-xs text-[var(--muted)]">{threads.length}</span>
+          </div>
         </div>
+
+        {showCreateThread && (
+          <div className="mb-4 rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-3 shadow-sm">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)] mb-2">
+              New Thread
+            </p>
+            <div className="space-y-2">
+              <Input
+                placeholder="Thread title"
+                value={newThreadTitle}
+                onChange={(event) => setNewThreadTitle(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    createThread();
+                  }
+                }}
+              />
+              <select
+                value={newThreadType}
+                onChange={(event) => setNewThreadType(event.target.value)}
+                className={cn(
+                  "w-full rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] px-4 py-3 text-sm",
+                  "text-[var(--foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--accent)]"
+                )}
+              >
+                <option value="general">general</option>
+                <option value="project">project</option>
+                <option value="task">task</option>
+              </select>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-full border border-[var(--card-border)] bg-[var(--surface)] px-3 py-2 text-sm text-[var(--foreground)] hover:border-[var(--accent)]"
+                  onClick={() => {
+                    setShowCreateThread(false);
+                    setNewThreadTitle("");
+                    setNewThreadType("general");
+                  }}
+                >
+                  Cancel
+                </button>
+                <Button
+                  onClick={createThread}
+                  disabled={!newThreadTitle.trim() || creatingThread}
+                >
+                  {creatingThread ? "Creating..." : "Create"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {loadingThreads ? (
           <p className="text-sm text-[var(--muted)]">Loading threads...</p>
         ) : (
