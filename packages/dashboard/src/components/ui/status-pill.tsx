@@ -6,6 +6,24 @@ const statusTone: Record<
   string,
   { label: string; dot: string; text: string; bg: string }
 > = {
+  pending: {
+    label: "Pending",
+    dot: "bg-slate-400",
+    text: "text-slate-200",
+    bg: "bg-slate-500/10",
+  },
+  in_progress: {
+    label: "In progress",
+    dot: "bg-cyan-400",
+    text: "text-cyan-200",
+    bg: "bg-cyan-500/10",
+  },
+  review: {
+    label: "Review",
+    dot: "bg-amber-300",
+    text: "text-amber-200",
+    bg: "bg-amber-500/10",
+  },
   active: {
     label: "Active",
     dot: "bg-emerald-400",
