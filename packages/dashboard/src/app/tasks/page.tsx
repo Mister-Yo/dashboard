@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -76,6 +76,14 @@ function selectClassName() {
 }
 
 export default function TasksPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-full"><p className="text-[var(--muted)]">Loading tasks...</p></div>}>
+      <TasksPageContent />
+    </Suspense>
+  );
+}
+
+function TasksPageContent() {
   const searchParams = useSearchParams();
   const queryProjectId = searchParams.get("projectId") ?? "";
   const [tasks, setTasks] = useState<Task[]>([]);

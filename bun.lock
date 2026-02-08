@@ -25,6 +25,10 @@
         "typescript": "^5.7.0",
       },
     },
+    "packages/coord-api": {
+      "name": "@dashboard/coord-api",
+      "version": "0.1.0",
+    },
     "packages/dashboard": {
       "name": "@dashboard/web",
       "version": "0.1.0",
@@ -73,6 +77,8 @@
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
 
     "@dashboard/api": ["@dashboard/api@workspace:packages/api"],
+
+    "@dashboard/coord-api": ["@dashboard/coord-api@workspace:packages/coord-api"],
 
     "@dashboard/shared": ["@dashboard/shared@workspace:packages/shared"],
 
