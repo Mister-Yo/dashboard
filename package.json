@@ -1,0 +1,10 @@
+{
+  "name": "dashboard-coordinator",
+  "version": "0.1.0",
+  "description": "Minimal coordinator API for agent communication",
+  "private": true,
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js"
+  }
+}
