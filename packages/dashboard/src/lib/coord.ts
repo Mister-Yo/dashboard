@@ -1,5 +1,16 @@
+const DEFAULT_DEV_COORD_URL = "http://localhost:8787";
+
 const COORD_API_URL =
-  process.env.NEXT_PUBLIC_COORD_API_URL ?? "http://134.209.162.250";
+  process.env.NEXT_PUBLIC_COORD_API_URL ??
+  (process.env.NODE_ENV === "development" ? DEFAULT_DEV_COORD_URL : "");
+
+function joinUrl(base: string, path: string) {
+  if (!base) return path;
+  if (base.endsWith("/") && path.startsWith("/")) {
+    return `${base.slice(0, -1)}${path}`;
+  }
+  return `${base}${path}`;
+}
 
 const TOKEN_KEY = "coord_token";
 
@@ -34,7 +45,7 @@ export async function coordFetch<T>(
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${COORD_API_URL}${path}`, {
+  const res = await fetch(joinUrl(COORD_API_URL, path), {
     ...options,
     headers,
   });
