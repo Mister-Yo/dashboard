@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
@@ -75,6 +76,7 @@ function selectClassName() {
 }
 
 export default function TasksPage() {
+  const searchParams = useSearchParams();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [agents, setAgents] = useState<AgentLite[]>([]);
@@ -99,6 +101,13 @@ export default function TasksPage() {
   const [filterStatus, setFilterStatus] = useState<TaskStatus | "all">("all");
   const [filterProjectId, setFilterProjectId] = useState<string>("all");
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    const projectFromQuery = searchParams.get("projectId");
+    if (!projectFromQuery) return;
+    setFilterProjectId(projectFromQuery);
+    setProjectId(projectFromQuery);
+  }, [searchParams]);
 
   useEffect(() => {
     async function load() {

@@ -212,6 +212,7 @@ dashboard/
 | Tasks page (list/create/status) | CODE | done | medium | ✅ Connected to /api/tasks |
 | Knowledge page (list/create/search) | CODE | done | medium | ✅ Connected to /api/knowledge |
 | Project membership management UI | CODE | done | medium | ✅ Assign/unassign agents + employees |
+| Project detail page | CODE | done | medium | ✅ Blockers, achievements, tasks in one view |
 | Fix Node.js version for build | CLAUDE | blocked | low | Local dev: 18.16, need >= 18.18 |
 
 ---
@@ -449,3 +450,4 @@ curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
 - 2026-02-08 [CODE]: Implemented Tasks page (list/create/status updates)
 - 2026-02-08 [CODE]: Implemented Knowledge page (list/create/search)
 - 2026-02-08 [CODE]: Added project membership management UI (assign/unassign agents + employees)
+- 2026-02-08 [CODE]: Added per-project detail view (blockers, achievements, tasks)
