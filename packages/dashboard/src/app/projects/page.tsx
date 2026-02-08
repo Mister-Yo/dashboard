@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
@@ -316,7 +317,12 @@ export default function ProjectsPage() {
                 <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
                   Project
                 </p>
-                <h3 className="text-lg font-semibold">{project.name}</h3>
+                <Link
+                  href={`/projects/${project.id}`}
+                  className="text-lg font-semibold hover:underline underline-offset-4"
+                >
+                  {project.name}
+                </Link>
               </div>
               <StatusPill status={project.status} />
             </div>
