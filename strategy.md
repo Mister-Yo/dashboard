@@ -339,19 +339,56 @@ For every project repo:
 
 ---
 
-## Production Server
+## Production Access (No Secrets)
 
-- **IP**: 134.209.162.250
-- **Provider**: DigitalOcean (2 vCPU, 4GB RAM, Frankfurt)
-- **OS**: Ubuntu 24.04
-- **Stack**: Node.js 22, PostgreSQL 16, Redis 7, Nginx
-- **Coordinator API**: http://134.209.162.250:8787 (internal), proxied via Nginx on :80
-- **Web Dashboard**: http://134.209.162.250
-- **SSH**: `ssh root@134.209.162.250` (password auth enabled)
-- **Services**: `systemctl status coordinator` / `systemctl status nginx`
-- **Repo on server**: `/opt/dashboard/` (coordinator API)
-- **Web files**: `/opt/dashboard-web/` (static HTML)
-- **DB**: `sudo -u postgres psql -d dashboard`
+### Endpoints
+- Dashboard: http://134.209.162.250
+- Coordinator API health: http://134.209.162.250/health
+
+### Server Details
+- Provider: DigitalOcean (2 vCPU, 4GB RAM, Frankfurt)
+- OS: Ubuntu 24.04
+- Stack: Node.js 22, PostgreSQL 16, Redis 7, Nginx
+- Services: `systemctl status coordinator` / `systemctl status nginx`
+- Repo on server: `/opt/dashboard/` (coordinator API)
+- Web files: `/opt/dashboard-web/` (static HTML)
+- DB: `sudo -u postgres psql -d dashboard`
+
+### SSH
+- Use SSH **keys only**. Do not store or share passwords in this repo or in chat.
+- If access is needed, request a key or updated instructions from the owner.
+
+---
+
+## Coordinator API — Usage (No Secrets)
+
+### Register agent (example)
+```bash
+curl -X POST http://134.209.162.250/api/coord/agents/register \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id":"code-001","name":"CODE","specialization_codes":["frontend","ui","telegram","integrations"],"status":"active"}'
+```
+
+### Create coordination thread
+```bash
+curl -X POST http://134.209.162.250/api/coord/threads \
+  -H "Content-Type: application/json" \
+  -d '{"title":"CLAUDE + CODE coordination","thread_type":"general","created_by":"CODE"}'
+```
+
+### Post message (replace <THREAD_ID>)
+```bash
+curl -X POST http://134.209.162.250/api/coord/messages \
+  -H "Content-Type: application/json" \
+  -d '{"thread_id":"<THREAD_ID>","sender_id":"CODE","message_type":"note","payload":{"text":"CODE online. Ready to work."}}'
+```
+
+### Heartbeat
+```bash
+curl -X POST http://134.209.162.250/api/coord/agents/heartbeat \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id":"code-001","status":"active"}'
+```
 
 ---
 
@@ -382,5 +419,6 @@ For every project repo:
 - 2026-02-07 [CLAUDE]: Created detailed strategy with architecture, tech stack, implementation phases
 - 2026-02-07 [CLAUDE]: Added Phase 0 (service setup), deployment: Vercel + Railway
 - 2026-02-07 [CLAUDE]: Added 10 additional ideas
-- 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies
+- 2026-02-08 [CLAUDE]: Merged CODE + CLAUDE strategies. Kept both: CODE's collaboration protocol, task ownership, MVP criteria + CLAUDE's architecture, tech stack, data models, code
+- 2026-02-08 [CODE]: Added production access + coordinator usage (no secrets)
 - 2026-02-08 [CLAUDE]: Deployed production server on DigitalOcean (134.209.162.250). Installed Node 22, PostgreSQL 16, Redis 7, Nginx. Deployed coordinator API + web dashboard
