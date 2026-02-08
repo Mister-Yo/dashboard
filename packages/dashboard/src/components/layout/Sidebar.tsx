@@ -4,16 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-  { href: "/", label: "Board", icon: "◻" },
-  { href: "/coordination", label: "Coordination", icon: "✶" },
-  { href: "/projects", label: "Projects", icon: "⌂" },
-  { href: "/agents", label: "Agents", icon: "◎" },
-  { href: "/employees", label: "Employees", icon: "◈" },
-  { href: "/tasks", label: "Tasks", icon: "✓" },
-  { href: "/knowledge", label: "Knowledge", icon: "▦" },
-  { href: "/controller", label: "AI Controller", icon: "▣" },
-  { href: "/admin", label: "Admin", icon: "⬡" },
-  { href: "/login", label: "Login", icon: "→" },
+  { href: "/", label: "Board", icon: "\u25FB" },
+  { href: "/activity", label: "Activity", icon: "\u25C9" },
+  { href: "/coordination", label: "Coordination", icon: "\u2736" },
+  { href: "/projects", label: "Projects", icon: "\u2302" },
+  { href: "/agents", label: "Agents", icon: "\u25CE" },
+  { href: "/employees", label: "Employees", icon: "\u25C8" },
+  { href: "/tasks", label: "Tasks", icon: "\u2713" },
+  { href: "/knowledge", label: "Knowledge", icon: "\u25A6" },
+  { href: "/controller", label: "AI Controller", icon: "\u25A3" },
+  { href: "/admin", label: "Admin", icon: "\u2B21" },
+  { href: "/login", label: "Login", icon: "\u2192" },
 ];
 
 export function Sidebar() {
