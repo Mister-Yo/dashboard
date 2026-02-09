@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { StatusPill } from "@/components/ui/status-pill";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 interface Employee {
   id: string;
@@ -20,14 +18,6 @@ export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("");
-  const [email, setEmail] = useState("");
-  const [telegram, setTelegram] = useState("");
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -46,7 +36,8 @@ export default function EmployeesPage() {
   const summary = useMemo(() => {
     const total = employees.length;
     const active = employees.filter((e) => e.status === "active").length;
-    return { total, active };
+    const pending = employees.filter((e) => e.status === "pending").length;
+    return { total, active, pending };
   }, [employees]);
 
   if (loading) {
@@ -68,51 +59,6 @@ export default function EmployeesPage() {
     );
   }
 
-  async function handleCreate() {
-    setSubmitting(true);
-    setFormError(null);
-    setApiKey(null);
-    setCopied(false);
-    try {
-      const created = await apiFetch<Employee>("/api/employees", {
-        method: "POST",
-        body: JSON.stringify({
-          name,
-          role,
-          email: email || null,
-          telegramUsername: telegram || null,
-        }),
-      });
-      setEmployees((prev) => [created, ...prev]);
-
-      const keyResult = await apiFetch<{ apiKey: string }>(
-        `/api/employees/${created.id}/api-key`,
-        { method: "POST" }
-      );
-      setApiKey(keyResult.apiKey);
-
-      setName("");
-      setRole("");
-      setEmail("");
-      setTelegram("");
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Failed to create");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function handleCopy() {
-    if (!apiKey) return;
-    try {
-      await navigator.clipboard.writeText(apiKey);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      setCopied(false);
-    }
-  }
-
   return (
     <div className="space-y-8">
       <header className="flex flex-wrap items-center justify-between gap-4">
@@ -123,72 +69,23 @@ export default function EmployeesPage() {
           <h1 className="text-3xl font-semibold">Human Team</h1>
           <p className="text-sm text-[var(--muted)] mt-2 max-w-xl">
             Track employees, their current status, and project assignments.
+            New employees register via <a href="/login" className="underline text-[var(--accent)]">/login</a> and are approved on <a href="/admin" className="underline text-[var(--accent)]">/admin</a>.
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
           <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
             {summary.total} total
           </span>
-          <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
+          <span className="rounded-full border border-emerald-400/30 text-emerald-400 bg-emerald-400/10 px-3 py-1">
             {summary.active} active
           </span>
+          {summary.pending > 0 && (
+            <span className="rounded-full border border-amber-400/30 text-amber-400 bg-amber-400/10 px-3 py-1">
+              {summary.pending} pending
+            </span>
+          )}
         </div>
       </header>
-
-      <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              Create
-            </p>
-            <h2 className="text-lg font-semibold">New Employee</h2>
-          </div>
-          <Button onClick={handleCreate} disabled={submitting || !name || !role}>
-            {submitting ? "Creating..." : "Create employee"}
-          </Button>
-        </div>
-        <div className="grid gap-3 md:grid-cols-2">
-          <Input
-            placeholder="Full name"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-          <Input
-            placeholder="Role"
-            value={role}
-            onChange={(event) => setRole(event.target.value)}
-          />
-          <Input
-            placeholder="Email (optional)"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-          />
-          <Input
-            placeholder="Telegram username (optional)"
-            value={telegram}
-            onChange={(event) => setTelegram(event.target.value)}
-          />
-        </div>
-        {apiKey && (
-          <div className="mt-4 rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4">
-            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-              API Key (show once)
-            </p>
-            <p className="text-sm mt-2 break-all">{apiKey}</p>
-            <div className="mt-3 flex items-center gap-2">
-              <Button onClick={handleCopy} className="px-3 py-1 text-xs">
-                {copied ? "Copied" : "Copy key"}
-              </Button>
-              <span className="text-xs text-[var(--muted)]">
-                Save now. It will not be shown again.
-              </span>
-            </div>
-          </div>
-        )}
-        {formError && (
-          <p className="mt-3 text-sm text-red-400">{formError}</p>
-        )}
-      </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {employees.map((employee) => (
@@ -213,13 +110,13 @@ export default function EmployeesPage() {
               <div className="flex items-center justify-between">
                 <span>Telegram</span>
                 <span className="text-[var(--foreground)]">
-                  {employee.telegramUsername ?? "—"}
+                  {employee.telegramUsername ?? "\u2014"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
                 <span>Email</span>
                 <span className="text-[var(--foreground)]">
-                  {employee.email ?? "—"}
+                  {employee.email ?? "\u2014"}
                 </span>
               </div>
             </div>

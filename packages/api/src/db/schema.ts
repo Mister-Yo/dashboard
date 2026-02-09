@@ -15,6 +15,8 @@ import {
 
 export const agentTypeEnum = pgEnum("agent_type", [
   "claude_code",
+  "codex",
+  "qa",
   "custom",
   "external",
 ]);
@@ -29,6 +31,7 @@ export const agentStatusEnum = pgEnum("agent_status", [
 export const employeeStatusEnum = pgEnum("employee_status", [
   "active",
   "inactive",
+  "pending",
 ]);
 
 export const projectStatusEnum = pgEnum("project_status", [
@@ -123,6 +126,7 @@ export const agents = pgTable("agents", {
   currentTaskId: uuid("current_task_id"),
   currentProjectId: uuid("current_project_id"),
   lastHeartbeat: timestamp("last_heartbeat"),
+  managerId: uuid("manager_id"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>().default({}),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -135,11 +139,13 @@ export const employees = pgTable("employees", {
   telegramChatId: varchar("telegram_chat_id", { length: 64 }),
   telegramUsername: varchar("telegram_username", { length: 255 }),
   email: varchar("email", { length: 255 }),
+  passwordHash: text("password_hash"),
   apiKeyHash: text("api_key_hash"),
   apiKeyPrefix: varchar("api_key_prefix", { length: 16 }),
   assignedProjectIds: jsonb("assigned_project_ids").$type<string[]>().default([]),
   status: employeeStatusEnum("status").default("active").notNull(),
   workStatus: workStatusEnum("work_status").default("idle").notNull(),
+  managerId: uuid("manager_id"),
   currentTaskDescription: text("current_task_description"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

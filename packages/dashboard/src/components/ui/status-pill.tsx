@@ -8,9 +8,9 @@ const statusTone: Record<
 > = {
   pending: {
     label: "Pending",
-    dot: "bg-slate-400",
-    text: "text-slate-200",
-    bg: "bg-slate-500/10",
+    dot: "bg-amber-400",
+    text: "text-amber-200",
+    bg: "bg-amber-500/10",
   },
   in_progress: {
     label: "In progress",
