@@ -111,14 +111,35 @@ export default function CoordinationPage() {
     loadThreads();
   }, [activeThreadId, authRequired]);
 
+  // Track whether user is near the bottom of the scroll container
+  const isNearBottomRef = useRef(true);
+  const prevMessageCountRef = useRef(0);
+
+  // Track scroll position to decide if we should auto-scroll
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    function handleScroll() {
+      if (!container) return;
+      const { scrollTop, scrollHeight, clientHeight } = container;
+      // Consider "near bottom" if within 100px of the end
+      isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 100;
+    }
+
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
+    let isFirstLoad = true;
 
     async function loadMessages() {
       if (!activeThreadId) return;
       if (authRequired) return;
       try {
-        setLoadingMessages(true);
+        if (isFirstLoad) setLoadingMessages(true);
         const data = await coordFetch<Message[]>(
           `/api/coord/messages?thread_id=${activeThreadId}`
         );
@@ -126,13 +147,40 @@ export default function CoordinationPage() {
           (a, b) =>
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
-        setMessages(data);
+
+        setMessages((prev) => {
+          // Only update if messages actually changed (compare by length + last id)
+          const lastPrevId = prev[prev.length - 1]?.id;
+          const lastNewId = data[data.length - 1]?.id;
+          if (prev.length === data.length && lastPrevId === lastNewId) {
+            return prev; // no change — skip re-render
+          }
+          return data;
+        });
+
+        // Track if new messages arrived for auto-scroll decision
+        const hasNewMessages = data.length > prevMessageCountRef.current;
+        prevMessageCountRef.current = data.length;
+
+        // Auto-scroll only on first load or when new messages arrive AND user is near bottom
+        if (isFirstLoad || (hasNewMessages && isNearBottomRef.current)) {
+          requestAnimationFrame(() => {
+            messagesEndRef.current?.scrollIntoView({ behavior: isFirstLoad ? "auto" : "smooth" });
+          });
+        }
+
+        isFirstLoad = false;
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load messages");
       } finally {
         setLoadingMessages(false);
       }
     }
+
+    // Reset on thread change
+    isFirstLoad = true;
+    prevMessageCountRef.current = 0;
+    isNearBottomRef.current = true;
 
     loadMessages();
     timer = setInterval(loadMessages, 8000);
@@ -152,11 +200,7 @@ export default function CoordinationPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [messages]);
+  // Auto-scroll is handled inside loadMessages above — no blind scroll on every render
 
   async function sendMessage() {
     if (!activeThreadId || !draft.trim()) return;
