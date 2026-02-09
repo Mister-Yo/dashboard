@@ -5,6 +5,9 @@ import { knowledgeEntries } from "../db/schema";
 
 const app = new Hono();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(id: string): boolean { return UUID_RE.test(id); }
+
 // List knowledge entries (with optional search)
 app.get("/", async (c) => {
   const search = c.req.query("search");
@@ -38,6 +41,7 @@ app.get("/", async (c) => {
 // Get entry by ID
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid ID format" }, 400);
   const [entry] = await db
     .select()
     .from(knowledgeEntries)
@@ -78,6 +82,7 @@ app.post("/", async (c) => {
 // Update knowledge entry
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid ID format" }, 400);
   const body = await c.req.json();
 
   const [updated] = await db
@@ -96,6 +101,7 @@ app.patch("/:id", async (c) => {
 // Delete knowledge entry
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid ID format" }, 400);
   const [deleted] = await db
     .delete(knowledgeEntries)
     .where(eq(knowledgeEntries.id, id))

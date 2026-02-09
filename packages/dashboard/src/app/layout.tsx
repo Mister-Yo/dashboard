@@ -31,7 +31,7 @@ export default function RootLayout({
         className={`${space.variable} ${jetbrains.variable} flex min-h-screen bg-[var(--background)] text-[var(--foreground)]`}
       >
         <Sidebar />
-        <main className="flex-1 p-6 overflow-auto">{children}</main>
+        <main className="flex-1 p-4 pt-16 lg:p-6 lg:pt-6 overflow-auto">{children}</main>
       </body>
     </html>
   );

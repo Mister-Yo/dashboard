@@ -5,6 +5,9 @@ import { projects, blockers, achievements } from "../db/schema";
 
 const app = new Hono();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(id: string): boolean { return UUID_RE.test(id); }
+
 // List all projects
 app.get("/", async (c) => {
   const result = await db.select().from(projects);
@@ -14,6 +17,7 @@ app.get("/", async (c) => {
 // Get project by ID (with blockers and achievements)
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid project ID format" }, 400);
   const [project] = await db
     .select()
     .from(projects)
@@ -65,6 +69,7 @@ app.post("/", async (c) => {
 // Update project
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid project ID format" }, 400);
   const body = await c.req.json();
 
   const [updated] = await db
@@ -135,6 +140,7 @@ app.post("/:id/achievements", async (c) => {
 // Delete project
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid project ID format" }, 400);
   const [deleted] = await db
     .delete(projects)
     .where(eq(projects.id, id))

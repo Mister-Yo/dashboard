@@ -5,6 +5,9 @@ import { tasks } from "../db/schema";
 
 const app = new Hono();
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(id: string): boolean { return UUID_RE.test(id); }
+
 // List all tasks (with optional filters)
 app.get("/", async (c) => {
   const projectId = c.req.query("projectId");
@@ -30,6 +33,7 @@ app.get("/", async (c) => {
 // Get task by ID
 app.get("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid task ID format" }, 400);
   const [task] = await db.select().from(tasks).where(eq(tasks.id, id));
 
   if (!task) {
@@ -84,6 +88,7 @@ app.post("/", async (c) => {
 // Update task
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid task ID format" }, 400);
   const body = await c.req.json();
 
   // Handle status transitions
@@ -113,6 +118,7 @@ app.patch("/:id", async (c) => {
 // Delete task
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
+  if (!isValidUuid(id)) return c.json({ error: "Invalid task ID format" }, 400);
   const [deleted] = await db
     .delete(tasks)
     .where(eq(tasks.id, id))
