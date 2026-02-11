@@ -82,18 +82,9 @@ app.use("/api/*", jwtAuth);
 // Auto-logging — records activity events for mutations (fire-and-forget)
 app.use("/api/*", activityLogger);
 
-// Require auth for dangerous mutations (DELETE, agent creation)
-// Note: individual routes can add requireAuth for more granular control
+// Require auth for dangerous mutations (DELETE on all resources)
 import { requireAuth } from "./middleware/api-key";
-app.use("/api/agents", async (c, next) => {
-  if (c.req.method === "DELETE") return requireAuth(c, next);
-  await next();
-});
-app.use("/api/employees/:id", async (c, next) => {
-  if (c.req.method === "DELETE") return requireAuth(c, next);
-  await next();
-});
-app.use("/api/projects/:id", async (c, next) => {
+app.use("/api/*", async (c, next) => {
   if (c.req.method === "DELETE") return requireAuth(c, next);
   await next();
 });
