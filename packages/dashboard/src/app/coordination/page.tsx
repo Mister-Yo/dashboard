@@ -446,6 +446,12 @@ export default function CoordinationPage() {
                   value={draft}
                   onChange={(event) => setDraft(event.target.value)}
                   className="border-none bg-transparent px-2 py-1 focus:ring-0"
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      handleSend();
+                    }
+                  }}
                 />
                 <Button
                   className="self-end"
@@ -456,7 +462,7 @@ export default function CoordinationPage() {
                 </Button>
               </div>
               <p className="text-xs text-[var(--muted)]">
-                Real-time via SSE. Use for check-ins, blockers, and next steps.
+                Real-time coordination via Hono API (/api/coord/). Enter to send, Shift+Enter for new line.
               </p>
             </div>
           </div>

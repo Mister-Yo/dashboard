@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
-import { useAgents } from "@/hooks/use-api";
+import { useAgents, useProjects } from "@/hooks/use-api";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,9 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/fade-in";
 import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardHeader, CardTitle, CardContent, CardStat } from "@/components/ui/card";
+import { ToggleSection } from "@/components/ui/toggle-section";
+import { formatTimeAgo } from "@/lib/time-utils";
 
 interface Agent {
   id: string;
@@ -37,24 +40,7 @@ function formatTime(value: string | null) {
   }).format(date);
 }
 
-function timeAgo(value: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  if (seconds < 0) return "just now";
-  if (seconds < 60) return `${seconds}s ago`;
-
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-}
+// Removed - now using formatTimeAgo from lib/time-utils
 
 export default function AgentsPage() {
   const {
@@ -63,6 +49,8 @@ export default function AgentsPage() {
     error: agentsError,
     refetch,
   } = useAgents();
+  
+  const { data: projects = [] } = useProjects();
 
   const [formError, setFormError] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -99,6 +87,13 @@ export default function AgentsPage() {
     const errored = agents.filter((a) => a.status === "error").length;
     return { total, active, idle, errored };
   }, [agents]);
+
+  const projectsMap = useMemo(() => {
+    return projects.reduce((acc, project) => {
+      acc[project.id] = project.name;
+      return acc;
+    }, {} as Record<string, string>);
+  }, [projects]);
 
   /* ── Loading ──────────────────────────────────────────── */
   if (loading) {
@@ -175,65 +170,71 @@ export default function AgentsPage() {
         />
 
         {/* ── Create Agent ──────────────────────────────── */}
-        <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Create
-              </p>
-              <h2 className="text-lg font-semibold">New Agent</h2>
+        <ToggleSection
+          title="Create"
+          description="Add new agents to your fleet"
+          buttonText="New Agent"
+          icon="🤖"
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="Agent name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              />
+              <Input
+                placeholder="Type (e.g. claude_code)"
+                value={type}
+                onChange={(event) => setType(event.target.value)}
+                className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              />
+              <Input
+                placeholder="Permissions (comma separated)"
+                value={permissions}
+                onChange={(event) => setPermissions(event.target.value)}
+                className="md:col-span-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              />
             </div>
+            
             <Button
               onClick={handleCreate}
               disabled={createAgent.isPending || !name}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+              className="w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
             >
-              {createAgent.isPending ? "Creating..." : "Create agent"}
+              {createAgent.isPending ? "Creating..." : "Create Agent"}
             </Button>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              placeholder="Agent name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-            />
-            <Input
-              placeholder="Type (e.g. claude_code)"
-              value={type}
-              onChange={(event) => setType(event.target.value)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-            />
-            <Input
-              placeholder="Permissions (comma separated)"
-              value={permissions}
-              onChange={(event) => setPermissions(event.target.value)}
-              className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-            />
-          </div>
-          {apiKey && (
-            <div className="mt-4 rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                API Key (show once)
-              </p>
-              <p className="text-sm mt-2 break-all">{apiKey}</p>
-              <div className="mt-3 flex items-center gap-2">
-                <Button
-                  onClick={handleCopy}
-                  className="px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
-                >
-                  {copied ? "Copied" : "Copy key"}
-                </Button>
-                <span className="text-xs text-[var(--muted)]">
-                  Save now. It will not be shown again.
-                </span>
+
+            {apiKey && (
+              <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  API Key (show once)
+                </p>
+                <p className="text-sm mt-2 break-all font-mono bg-[var(--surface)] p-2 rounded-lg border border-[var(--card-border)]">
+                  {apiKey}
+                </p>
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    onClick={handleCopy}
+                    className="px-3 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
+                  >
+                    {copied ? "Copied" : "Copy key"}
+                  </Button>
+                  <span className="text-xs text-[var(--muted)]">
+                    Save now. It will not be shown again.
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
-          {formError && (
-            <p className="mt-3 text-sm text-red-400">{formError}</p>
-          )}
-        </section>
+            )}
+            
+            {formError && (
+              <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+                {formError}
+              </p>
+            )}
+          </div>
+        </ToggleSection>
 
         {/* ── Agent Grid ────────────────────────────────── */}
         {agents.length === 0 ? (
@@ -247,54 +248,42 @@ export default function AgentsPage() {
           <FadeInStagger className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             {agents.map((agent) => (
               <FadeInItem key={agent.id}>
-                <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                        Agent
-                      </p>
-                      <h3 className="text-lg font-semibold">{agent.name}</h3>
-                      <p className="text-xs text-[var(--muted)] mt-1">
+                <Card hover glow>
+                  <CardHeader>
+                    <CardTitle label="Agent">
+                      {agent.name}
+                      <p className="text-xs text-[var(--muted)] mt-1 font-normal">
                         {agent.type}
                       </p>
-                    </div>
+                    </CardTitle>
                     <StatusPill status={agent.status} />
-                  </div>
+                  </CardHeader>
 
-                  <div className="mt-4 grid gap-2 text-xs text-[var(--muted)]">
-                    <div className="flex items-center justify-between">
-                      <span>Heartbeat</span>
-                      <span
-                        className="text-[var(--foreground)]"
-                        title={formatTime(agent.lastHeartbeat)}
-                      >
-                        {timeAgo(agent.lastHeartbeat) ?? formatTime(agent.lastHeartbeat)}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Project</span>
-                      <span className="text-[var(--foreground)]">
-                        {agent.currentProjectId ?? "\u2014"}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Task</span>
-                      <span className="text-[var(--foreground)]">
-                        {agent.currentTaskId ?? "\u2014"}
-                      </span>
-                    </div>
-                  </div>
+                  <CardContent>
+                    <CardStat
+                      label="Heartbeat"
+                      value={formatTimeAgo(agent.lastHeartbeat)}
+                    />
+                    <CardStat
+                      label="Project"
+                      value={agent.currentProjectId ? (projectsMap[agent.currentProjectId] || "Unknown Project") : "—"}
+                    />
+                    <CardStat
+                      label="Task"
+                      value={agent.currentTaskId ? agent.currentTaskId.slice(0, 8) + "..." : "—"}
+                    />
 
-                  <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
-                    <p className="text-[var(--muted)]">Permissions</p>
-                    <p className="text-sm font-medium">
-                      {agent.permissions?.length
-                        ? agent.permissions.join(", ")
-                        : "No permissions set"}
-                    </p>
-                  </div>
+                    <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
+                      <p className="text-xs text-[var(--muted)] mb-1">Permissions</p>
+                      <p className="text-xs font-medium">
+                        {agent.permissions?.length
+                          ? agent.permissions.join(", ")
+                          : "No permissions set"}
+                      </p>
+                    </div>
+                  </CardContent>
 
-                  <div className="mt-3">
+                  <div className="mt-4">
                     <Link
                       href={`/agents/${agent.id}/chat`}
                       className="inline-flex items-center justify-center gap-2 rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-foreground)] transition hover:bg-[var(--accent-strong)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--background)]"
@@ -302,7 +291,7 @@ export default function AgentsPage() {
                       Chat
                     </Link>
                   </div>
-                </div>
+                </Card>
               </FadeInItem>
             ))}
           </FadeInStagger>

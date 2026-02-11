@@ -10,11 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { PageHeader } from "@/components/layout/page-header";
-import { FadeIn } from "@/components/ui/fade-in";
+import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/fade-in";
 import { SkeletonGrid } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Card, CardHeader, CardTitle, CardContent, CardStat, CardFooter } from "@/components/ui/card";
+import { ToggleSection } from "@/components/ui/toggle-section";
 
 interface AgentLite {
   id: string;
@@ -344,135 +346,131 @@ export default function ProjectsPage() {
           ]}
         />
 
-        <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                Create
-              </p>
-              <h2 className="text-lg font-semibold">New Project</h2>
+        <ToggleSection
+          title="Create"
+          description="Launch new strategic initiatives"
+          buttonText="New Project"
+          icon="⌂"
+        >
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input
+                placeholder="Project name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+              <Input
+                placeholder="GitHub repo (org/name)"
+                value={repo}
+                onChange={(event) => setRepo(event.target.value)}
+              />
+              <Input
+                placeholder="Branch"
+                value={branch}
+                onChange={(event) => setBranch(event.target.value)}
+              />
+              <Input
+                placeholder="Short description"
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+              />
             </div>
-            <Button onClick={handleCreate} disabled={submitting || !name || !repo}>
-              {submitting ? "Creating..." : "Create project"}
+            
+            <Button 
+              onClick={handleCreate} 
+              disabled={submitting || !name || !repo}
+              className="w-full"
+            >
+              {submitting ? "Creating..." : "Create Project"}
             </Button>
+            
+            {formError && (
+              <p className="text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+                {formError}
+              </p>
+            )}
           </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <Input
-              placeholder="Project name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <Input
-              placeholder="GitHub repo (org/name)"
-              value={repo}
-              onChange={(event) => setRepo(event.target.value)}
-            />
-            <Input
-              placeholder="Branch"
-              value={branch}
-              onChange={(event) => setBranch(event.target.value)}
-            />
-            <Input
-              placeholder="Short description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </div>
-          {formError && (
-            <p className="mt-3 text-sm text-red-400">{formError}</p>
-          )}
-        </section>
+        </ToggleSection>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <FadeInStagger className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedProjects.map((project: Project) => {
             const isArchived = project.status === "archived";
             const projectAgents = agents.filter((a: AgentLite) => a.currentProjectId === project.id);
             const projectEmployees = employees.filter((e: EmployeeLite) => e.assignedProjectIds?.includes(project.id));
 
             return (
-              <div
-                key={project.id}
-                className={cn(
-                  "rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4 transition-all",
-                  isArchived && "opacity-50"
-                )}
-              >
-                {membershipError && (
-                  <p className="mb-3 text-sm text-red-400">{membershipError}</p>
-                )}
-
-                {/* Header — clickable to tasks */}
-                <div className="flex items-center justify-between gap-3">
-                  <div
-                    className="flex-1 cursor-pointer group"
-                    onClick={() => router.push(`/tasks?projectId=${project.id}`)}
-                  >
-                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                      Project
+              <FadeInItem key={project.id}>
+                <Card hover glow className={cn(isArchived && "opacity-50")}>
+                  {membershipError && (
+                    <p className="mb-3 text-sm text-red-400 bg-red-400/10 border border-red-400/20 rounded-lg p-3">
+                      {membershipError}
                     </p>
-                    <p className="text-lg font-semibold group-hover:text-[var(--accent)] transition-colors">
-                      {project.name}
-                    </p>
-                  </div>
-                  <StatusPill status={project.status} />
-                </div>
-
-                <p className="text-sm text-[var(--muted)] mt-3 line-clamp-2">
-                  {project.description || "No description yet."}
-                </p>
-
-                <div className="mt-4 space-y-2 text-xs text-[var(--muted)]">
-                  <div className="flex items-center justify-between">
-                    <span>Repo</span>
-                    <span className="text-[var(--foreground)] truncate ml-2 max-w-[60%] text-right">
-                      {project.githubRepo}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Branch</span>
-                    <span className="text-[var(--foreground)]">{project.githubBranch}</span>
-                  </div>
-                  {project.strategyPath && (
-                    <div className="flex items-center justify-between">
-                      <span>Strategy</span>
-                      <span className="text-[var(--foreground)]">{project.strategyPath}</span>
-                    </div>
                   )}
-                </div>
 
-                <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                  <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
-                    <p className="text-[var(--muted)]">Agents</p>
-                    <p className="text-sm font-medium">{projectAgents.length}</p>
-                  </div>
-                  <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2">
-                    <p className="text-[var(--muted)]">Employees</p>
-                    <p className="text-sm font-medium">{projectEmployees.length}</p>
-                  </div>
-                </div>
+                  <CardHeader>
+                    <CardTitle 
+                      label="Project" 
+                      className="cursor-pointer group flex-1"
+                      onClick={() => router.push(`/tasks?projectId=${project.id}`)}
+                    >
+                      <span className="group-hover:text-[var(--accent)] transition-colors">
+                        {project.name}
+                      </span>
+                    </CardTitle>
+                    <StatusPill status={project.status} />
+                  </CardHeader>
 
-                {/* Action buttons */}
-                <div className="mt-4 flex items-center gap-2">
-                  <button
-                    onClick={() => router.push(`/tasks?projectId=${project.id}`)}
-                    className="flex-1 text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
-                  >
-                    Tasks
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleArchive(project.id); }}
-                    disabled={mutating === `archive:${project.id}`}
-                    className="text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-amber-500/40 hover:text-amber-400 transition-all disabled:opacity-50"
-                  >
-                    {mutating === `archive:${project.id}` ? "..." : isArchived ? "Restore" : "Archive"}
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(project.id); }}
-                    className="text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-red-500/40 hover:text-red-400 transition-all"
-                  >
-                    Delete
-                  </button>
-                </div>
+                  <CardContent>
+                    <p className="text-sm text-[var(--muted)] line-clamp-2 mb-4">
+                      {project.description || "No description yet."}
+                    </p>
+
+                    <div className="space-y-2">
+                      <CardStat 
+                        label="Repo" 
+                        value={project.githubRepo.length > 20 ? project.githubRepo.slice(0, 20) + "..." : project.githubRepo}
+                      />
+                      <CardStat label="Branch" value={project.githubBranch} />
+                      {project.strategyPath && (
+                        <CardStat label="Strategy" value={project.strategyPath} />
+                      )}
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2 text-center">
+                        <p className="text-xs text-[var(--muted)]">Agents</p>
+                        <p className="text-lg font-semibold text-[var(--accent)]">{projectAgents.length}</p>
+                      </div>
+                      <div className="rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2 text-center">
+                        <p className="text-xs text-[var(--muted)]">Employees</p>
+                        <p className="text-lg font-semibold text-[var(--accent)]">{projectEmployees.length}</p>
+                      </div>
+                    </div>
+                  </CardContent>
+
+                  <CardFooter>
+                    <div className="flex items-center gap-2 w-full">
+                      <button
+                        onClick={() => router.push(`/tasks?projectId=${project.id}`)}
+                        className="flex-1 text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--foreground)] hover:border-[var(--accent)] hover:text-[var(--accent)] transition-all"
+                      >
+                        Tasks
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleArchive(project.id); }}
+                        disabled={mutating === `archive:${project.id}`}
+                        className="text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-amber-500/40 hover:text-amber-400 transition-all disabled:opacity-50"
+                      >
+                        {mutating === `archive:${project.id}` ? "..." : isArchived ? "Restore" : "Archive"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(project.id); }}
+                        className="text-xs font-medium px-3 py-2 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] text-[var(--muted)] hover:border-red-500/40 hover:text-red-400 transition-all"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </CardFooter>
 
                 {/* Agents & Employees assignment (collapse for archived) */}
                 {!isArchived && (
@@ -576,7 +574,8 @@ export default function ProjectsPage() {
                     </div>
                   </div>
                 )}
-              </div>
+                </Card>
+              </FadeInItem>
             );
           })}
 
@@ -585,9 +584,10 @@ export default function ProjectsPage() {
               icon="📁"
               title="No projects created yet"
               description="Add one above to begin."
+              className="col-span-full rounded-2xl border border-dashed border-[var(--card-border)]"
             />
           )}
-        </section>
+        </FadeInStagger>
 
         <ConfirmDialog
           open={deleteTarget !== null}

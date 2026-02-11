@@ -13,6 +13,7 @@ import { SkeletonGrid } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/ui/error-state";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
+import { formatTimeAgo, formatTime } from "@/lib/time-utils";
 
 interface Evaluation {
   id: string;
@@ -28,24 +29,7 @@ interface Evaluation {
 
 const STALE_MINUTES = 15;
 
-function formatTime(value: string | null) {
-  if (!value) return "\u2014";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "\u2014";
-  return new Intl.DateTimeFormat("ru-RU", {
-    hour: "2-digit",
-    minute: "2-digit",
-    day: "2-digit",
-    month: "short",
-  }).format(date);
-}
-
-function minutesAgo(value: string | null) {
-  if (!value) return null;
-  const time = new Date(value).getTime();
-  if (Number.isNaN(time)) return null;
-  return Math.floor((Date.now() - time) / 60000);
-}
+// Removed - now using formatTimeAgo and formatTime from lib/time-utils
 
 export default function ControllerPage() {
   const { data: agents = [], isLoading: loadingAgents, error: agentsError, refetch } = useAgents();
@@ -173,9 +157,7 @@ export default function ControllerPage() {
             ) : (
               <div className="space-y-3">
                 {derived.staleAgents.slice(0, 12).map((agent) => {
-                  const mins = minutesAgo(agent.lastHeartbeat);
-                  const heartbeatLabel =
-                    mins === null ? "no heartbeat" : `${mins}m ago`;
+                  const heartbeatLabel = formatTimeAgo(agent.lastHeartbeat);
                   return (
                     <div
                       key={agent.id}
