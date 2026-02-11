@@ -1,10 +1,26 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
-import { createHash } from "crypto";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "../db";
 import { employees } from "../db/schema";
 import { generateApiKey } from "../services/api-key";
 import { isValidUuid } from "../lib/utils";
+import { requireAuth } from "../middleware/api-key";
+
+const updateEmployeeSchema = z.object({
+  name: z.string().min(1).optional(),
+  role: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  telegramUsername: z.string().optional().nullable(),
+  telegramChatId: z.string().optional().nullable(),
+  password: z.string().min(4).optional(),
+  status: z.enum(["active", "inactive", "pending"]).optional(),
+  workStatus: z.enum(["working", "idle", "off", "waiting"]).optional(),
+  managerId: z.string().uuid().nullable().optional(),
+  currentTaskDescription: z.string().optional().nullable(),
+  assignedProjectIds: z.array(z.string()).optional(),
+});
 
 const app = new Hono();
 
@@ -284,33 +300,42 @@ app.post("/:id/api-key", async (c) => {
 });
 
 // Update employee
-app.patch("/:id", async (c) => {
+app.patch("/:id", zValidator("json", updateEmployeeSchema), async (c) => {
   const id = c.req.param("id");
   if (!isValidUuid(id)) {
     return c.json({ error: "Invalid employee ID format" }, 400);
   }
-  const body = await c.req.json();
+  const body = c.req.valid("json");
+  const updateData: Record<string, unknown> = { updatedAt: new Date() };
+
+  // Whitelist fields
+  if (body.name !== undefined) updateData.name = body.name;
+  if (body.role !== undefined) updateData.role = body.role;
+  if (body.email !== undefined) updateData.email = body.email;
+  if (body.telegramUsername !== undefined) updateData.telegramUsername = body.telegramUsername;
+  if (body.telegramChatId !== undefined) updateData.telegramChatId = body.telegramChatId;
+  if (body.status !== undefined) updateData.status = body.status;
+  if (body.workStatus !== undefined) updateData.workStatus = body.workStatus;
+  if (body.currentTaskDescription !== undefined) updateData.currentTaskDescription = body.currentTaskDescription;
+  if (body.assignedProjectIds !== undefined) updateData.assignedProjectIds = body.assignedProjectIds;
 
   // If password is being updated, hash it
   if (body.password) {
-    body.passwordHash = await hashPassword(body.password);
-    delete body.password;
+    updateData.passwordHash = await hashPassword(body.password);
   }
 
   // Cycle detection for managerId changes
   if (body.managerId !== undefined) {
-    if (body.managerId && !isValidUuid(body.managerId)) {
-      return c.json({ error: "Invalid managerId format" }, 400);
-    }
     const cycle = await wouldCreateCycle(id, body.managerId);
     if (cycle) {
       return c.json({ error: "Cannot set manager: would create a circular reporting chain" }, 400);
     }
+    updateData.managerId = body.managerId;
   }
 
   const [updated] = await db
     .update(employees)
-    .set({ ...body, updatedAt: new Date() })
+    .set(updateData)
     .where(eq(employees.id, id))
     .returning();
 

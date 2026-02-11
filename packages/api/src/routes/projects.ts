@@ -1,9 +1,22 @@
 import { Hono } from "hono";
 import { eq, desc } from "drizzle-orm";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "../db";
 import { projects, blockers, achievements, agents, employees, strategyChanges } from "../db/schema";
 import { isValidUuid } from "../lib/utils";
 import { broadcast } from "./sse";
+
+const updateProjectSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional(),
+  githubRepo: z.string().optional(),
+  githubBranch: z.string().optional(),
+  strategyPath: z.string().optional(),
+  status: z.enum(["active", "paused", "completed", "blocked"]).optional(),
+  assignedAgentIds: z.array(z.string()).optional(),
+  assignedEmployeeIds: z.array(z.string()).optional(),
+});
 
 const app = new Hono();
 
@@ -67,10 +80,10 @@ app.post("/", async (c) => {
 });
 
 // Update project (with auto strategy change recording)
-app.patch("/:id", async (c) => {
+app.patch("/:id", zValidator("json", updateProjectSchema), async (c) => {
   const id = c.req.param("id");
   if (!isValidUuid(id)) return c.json({ error: "Invalid project ID format" }, 400);
-  const body = await c.req.json();
+  const body = c.req.valid("json");
 
   // Fetch current project to compute diff
   const [current] = await db.select().from(projects).where(eq(projects.id, id));
