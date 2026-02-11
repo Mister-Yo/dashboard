@@ -3,12 +3,47 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
+import { useStrategyChanges } from "@/hooks/use-api";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/layout/page-header";
+import { SkeletonGrid } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
+
+interface GitHubActivity {
+  commits: { sha: string; message: string; author: string; date: string; url: string }[];
+  issues: { number: number; title: string; state: string; createdAt: string; url: string }[];
+  pullRequests: { number: number; title: string; state: string; createdAt: string; url: string; draft: boolean }[];
+}
+
+function useGitHubActivity(projectId: string | null) {
+  return useQuery<GitHubActivity>({
+    queryKey: ["github-activity", projectId],
+    queryFn: () => apiFetch(`/api/github/projects/${projectId}/activity`),
+    enabled: !!projectId,
+    staleTime: 120_000,
+    retry: false,
+  });
+}
+
+function timeAgo(date: string) {
+  const now = Date.now();
+  const d = new Date(date).getTime();
+  const diffMs = now - d;
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
 
 type TaskStatus = "pending" | "in_progress" | "review" | "completed" | "blocked";
 type TaskPriority = "low" | "medium" | "high" | "urgent";
@@ -108,6 +143,9 @@ export default function ProjectDetailPage() {
   const [achievementBy, setAchievementBy] = useState("CEO");
 
   const [mutating, setMutating] = useState<string | null>(null);
+  const [showStrategyHistory, setShowStrategyHistory] = useState(false);
+  const { data: strategyChanges = [] } = useStrategyChanges(projectId);
+  const { data: github, isLoading: ghLoading, error: ghError } = useGitHubActivity(projectId || null);
 
   useEffect(() => {
     async function load() {
@@ -241,81 +279,64 @@ export default function ProjectDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-[var(--muted)]">Loading project...</p>
-      </div>
+      <FadeIn>
+        <PageHeader label="Project" title="Loading..." />
+        <SkeletonGrid count={4} />
+      </FadeIn>
     );
   }
 
   if (!projectId) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-red-400 mb-2">Invalid project id</p>
-          <p className="text-[var(--muted)] text-sm">Missing route parameter.</p>
-        </div>
-      </div>
-    );
+    return <ErrorState message="Invalid project ID" detail="Missing route parameter." />;
   }
 
   if (error) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-red-400 mb-2">Failed to connect to API</p>
-          <p className="text-[var(--muted)] text-sm">{error}</p>
-        </div>
-      </div>
-    );
+    return <ErrorState message="Failed to connect to API" detail={error} />;
   }
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-[var(--muted)]">Project not found.</p>
-      </div>
+      <EmptyState icon="📁" title="Project not found" description="This project may have been deleted." />
     );
   }
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-            Project
-          </p>
-          <h1 className="text-3xl font-semibold">{project.name}</h1>
-          <p className="text-sm text-[var(--muted)] mt-2 max-w-2xl">
-            {project.description || "No description yet."}
-          </p>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
-            <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
-              repo{" "}
-              <a
-                href={`https://github.com/${project.githubRepo}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-[var(--foreground)] hover:underline"
-              >
-                {project.githubRepo}
-              </a>
-            </span>
-            <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
-              branch <span className="text-[var(--foreground)]">{project.githubBranch}</span>
-            </span>
-            <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
-              strategy <span className="text-[var(--foreground)]">{project.strategyPath}</span>
-            </span>
-            <Link
-              href={`/tasks?projectId=${project.id}`}
-              className="rounded-full border border-[var(--card-border)] px-3 py-1 text-[var(--foreground)] hover:border-[var(--accent)]"
-            >
-              open tasks
-            </Link>
-          </div>
-        </div>
-        <StatusPill status={project.status} />
-      </header>
+    <FadeIn className="space-y-8">
+      <PageHeader
+        label="Project"
+        title={project.name}
+        description={project.description || "No description yet."}
+        stats={[
+          { label: project.status, value: tasks.length, color: project.status === "active" ? "success" as const : "muted" as const },
+        ]}
+        actions={
+          <Link
+            href={`/tasks?projectId=${project.id}`}
+            className="inline-flex items-center rounded-full bg-[var(--accent)] px-4 py-2 text-sm font-medium text-[var(--accent-foreground)] hover:bg-[var(--accent-strong)] transition"
+          >
+            Open Tasks
+          </Link>
+        }
+      />
+      <div className="flex flex-wrap items-center gap-3 text-xs text-[var(--muted)]">
+        <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
+          repo{" "}
+          <a
+            href={`https://github.com/${project.githubRepo}`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[var(--foreground)] hover:underline"
+          >
+            {project.githubRepo}
+          </a>
+        </span>
+        <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
+          branch <span className="text-[var(--foreground)]">{project.githubBranch}</span>
+        </span>
+        <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
+          strategy <span className="text-[var(--foreground)]">{project.strategyPath}</span>
+        </span>
+      </div>
 
       <section className="grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
@@ -472,6 +493,167 @@ export default function ProjectDetailPage() {
         </div>
       </section>
 
+      {/* GitHub Activity */}
+      {project.githubRepo && (
+        <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">GitHub</p>
+              <h2 className="text-lg font-semibold">Repository Activity</h2>
+            </div>
+          </div>
+
+          {ghLoading && <p className="text-sm text-[var(--muted)]">Loading GitHub data...</p>}
+          {ghError && <p className="text-sm text-[var(--muted)]">GitHub integration not available.</p>}
+
+          {github && (
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div>
+                <h3 className="text-sm font-medium text-[var(--muted)] mb-3">Recent Commits</h3>
+                {github.commits.length === 0 ? (
+                  <p className="text-xs text-[var(--muted)]">No recent commits.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {github.commits.map((c) => (
+                      <a key={c.sha} href={c.url} target="_blank" rel="noopener noreferrer" className="block p-2 rounded-xl hover:bg-white/5 transition">
+                        <div className="flex items-center gap-2">
+                          <code className="text-[10px] text-[var(--accent)] bg-[var(--accent)]/10 px-1.5 py-0.5 rounded">{c.sha}</code>
+                          <span className="text-[10px] text-[var(--muted)]">{timeAgo(c.date)}</span>
+                        </div>
+                        <p className="text-xs mt-1 truncate">{c.message}</p>
+                        <p className="text-[10px] text-[var(--muted)] mt-0.5">{c.author}</p>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-[var(--muted)] mb-3">Open Issues</h3>
+                {github.issues.length === 0 ? (
+                  <p className="text-xs text-[var(--muted)]">No open issues.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {github.issues.map((i) => (
+                      <a key={i.number} href={i.url} target="_blank" rel="noopener noreferrer" className="block p-2 rounded-xl hover:bg-white/5 transition">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[var(--muted)]">#{i.number}</span>
+                          <span className="text-[10px] text-[var(--muted)]">{timeAgo(i.createdAt)}</span>
+                        </div>
+                        <p className="text-xs mt-1">{i.title}</p>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div>
+                <h3 className="text-sm font-medium text-[var(--muted)] mb-3">Open PRs</h3>
+                {github.pullRequests.length === 0 ? (
+                  <p className="text-xs text-[var(--muted)]">No open PRs.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {github.pullRequests.map((pr) => (
+                      <a key={pr.number} href={pr.url} target="_blank" rel="noopener noreferrer" className="block p-2 rounded-xl hover:bg-white/5 transition">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-[var(--muted)]">#{pr.number}</span>
+                          {pr.draft && <span className="text-[10px] text-yellow-500 bg-yellow-500/10 px-1.5 py-0.5 rounded">draft</span>}
+                          <span className="text-[10px] text-[var(--muted)]">{timeAgo(pr.createdAt)}</span>
+                        </div>
+                        <p className="text-xs mt-1">{pr.title}</p>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Strategy History */}
+      <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Strategy
+            </p>
+            <h2 className="text-lg font-semibold">Change History</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[var(--muted)]">
+              {strategyChanges.length} changes
+            </span>
+            {strategyChanges.length > 0 && (
+              <button
+                onClick={() => setShowStrategyHistory(!showStrategyHistory)}
+                className="text-xs text-[var(--foreground)] hover:underline underline-offset-4"
+              >
+                {showStrategyHistory ? "Hide" : "Show"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {strategyChanges.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">No strategy changes recorded yet.</p>
+        ) : !showStrategyHistory ? (
+          <div className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4">
+            <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+              Latest · {formatTime(strategyChanges[0].timestamp)} · by {strategyChanges[0].authorName}
+            </p>
+            <p className="mt-2 text-sm text-[var(--foreground)]">
+              {strategyChanges[0].summary}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {strategyChanges.slice(0, 10).map((sc) => {
+              let diffParsed: Record<string, { old: unknown; new: unknown }> | null = null;
+              try { diffParsed = JSON.parse(sc.diff); } catch {}
+              return (
+                <div
+                  key={sc.id}
+                  className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface-2)] p-4"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                        {formatTime(sc.timestamp)} · by {sc.authorName}
+                        {sc.commitSha && (
+                          <span className="ml-2 font-mono text-[var(--foreground)]">
+                            {sc.commitSha.slice(0, 7)}
+                          </span>
+                        )}
+                      </p>
+                      <p className="mt-2 text-sm text-[var(--foreground)]">{sc.summary}</p>
+                    </div>
+                    <span className="text-xs rounded-full border border-[var(--card-border)] px-2 py-0.5 text-[var(--muted)]">
+                      {sc.authorType}
+                    </span>
+                  </div>
+                  {diffParsed && (
+                    <div className="mt-3 space-y-1">
+                      {Object.entries(diffParsed).map(([key, val]) => (
+                        <div key={key} className="text-xs text-[var(--muted)] flex gap-2">
+                          <span className="font-medium text-[var(--foreground)]">{key}:</span>
+                          <span className="text-red-400 line-through">{String(val.old).slice(0, 60)}</span>
+                          <span>→</span>
+                          <span className="text-emerald-400">{String(val.new).slice(0, 60)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {strategyChanges.length > 10 && (
+              <p className="text-xs text-[var(--muted)]">
+                Showing 10 of {strategyChanges.length}.
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
       <section className="rounded-2xl border border-[var(--card-border)] bg-[var(--surface)] p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -544,6 +726,6 @@ export default function ProjectDetailPage() {
           </p>
         )}
       </section>
-    </div>
+    </FadeIn>
   );
 }

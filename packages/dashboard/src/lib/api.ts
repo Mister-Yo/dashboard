@@ -12,14 +12,21 @@ function joinUrl(base: string, path: string) {
   return `${base}${path}`;
 }
 
+export function getApiUrl(): string {
+  return API_URL;
+}
+
 export async function apiFetch<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("employee_token") : null;
+
   const res = await fetch(joinUrl(API_URL, path), {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options?.headers,
     },
   });

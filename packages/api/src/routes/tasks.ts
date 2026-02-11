@@ -1,12 +1,32 @@
 import { Hono } from "hono";
 import { eq, and, isNull } from "drizzle-orm";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "../db";
 import { tasks } from "../db/schema";
+import { isValidUuid } from "../lib/utils";
+import { broadcast } from "./sse";
+
+const createTaskSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().optional(),
+  projectId: z.string().uuid().nullable().optional(),
+  assigneeType: z.enum(["agent", "employee", "ceo"]),
+  assigneeId: z.string().min(1),
+  delegatedBy: z.string().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional().default("medium"),
+  dueDate: z.string().datetime().nullable().optional(),
+  parentTaskId: z.string().uuid().nullable().optional(),
+  tags: z.array(z.string()).optional(),
+});
+
+const updateTaskSchema = createTaskSchema
+  .extend({
+    status: z.enum(["pending", "in_progress", "review", "completed", "blocked"]).optional(),
+  })
+  .partial();
 
 const app = new Hono();
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isValidUuid(id: string): boolean { return UUID_RE.test(id); }
 
 // List all tasks (with optional filters)
 app.get("/", async (c) => {
@@ -19,7 +39,10 @@ app.get("/", async (c) => {
   // Apply filters via where clauses
   const conditions = [];
   if (projectId) conditions.push(eq(tasks.projectId, projectId));
-  if (status) conditions.push(eq(tasks.status, status as any));
+  const validStatuses = ["pending", "in_progress", "review", "completed", "blocked"] as const;
+  if (status && validStatuses.includes(status as typeof validStatuses[number])) {
+    conditions.push(eq(tasks.status, status as typeof validStatuses[number]));
+  }
   if (assigneeId) conditions.push(eq(tasks.assigneeId, assigneeId));
 
   const result =
@@ -44,8 +67,7 @@ app.get("/:id", async (c) => {
 });
 
 // Create task
-app.post("/", async (c) => {
-  const body = await c.req.json();
+app.post("/", zValidator("json", createTaskSchema), async (c) => {
   const {
     title,
     description,
@@ -57,14 +79,7 @@ app.post("/", async (c) => {
     dueDate,
     parentTaskId,
     tags,
-  } = body;
-
-  if (!title || !assigneeType || !assigneeId || !delegatedBy) {
-    return c.json(
-      { error: "title, assigneeType, assigneeId, and delegatedBy are required" },
-      400
-    );
-  }
+  } = c.req.valid("json");
 
   const [task] = await db
     .insert(tasks)
@@ -82,17 +97,18 @@ app.post("/", async (c) => {
     })
     .returning();
 
+  broadcast({ type: "task:created", data: task, timestamp: new Date().toISOString() });
   return c.json(task, 201);
 });
 
 // Update task
-app.patch("/:id", async (c) => {
+app.patch("/:id", zValidator("json", updateTaskSchema), async (c) => {
   const id = c.req.param("id");
   if (!isValidUuid(id)) return c.json({ error: "Invalid task ID format" }, 400);
-  const body = await c.req.json();
+  const body = c.req.valid("json");
 
   // Handle status transitions
-  const updateData: Record<string, any> = { ...body, updatedAt: new Date() };
+  const updateData: Record<string, unknown> = { ...body, updatedAt: new Date() };
 
   if (body.status === "completed") {
     updateData.completedAt = new Date();
@@ -112,6 +128,7 @@ app.patch("/:id", async (c) => {
     return c.json({ error: "Task not found" }, 404);
   }
 
+  broadcast({ type: "task:updated", data: updated, timestamp: new Date().toISOString() });
   return c.json(updated);
 });
 

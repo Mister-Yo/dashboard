@@ -1,16 +1,28 @@
 import { Hono } from "hono";
 import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 import { db } from "../db";
 import { agents, employees } from "../db/schema";
 import { generateApiKey } from "../services/api-key";
+import { isValidUuid } from "../lib/utils";
+import { broadcast } from "./sse";
+
+const createAgentSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().optional().default("custom"),
+  permissions: z.array(z.string()).optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
+const updateAgentSchema = createAgentSchema
+  .extend({
+    managerId: z.string().uuid().nullable().optional(),
+    status: z.string().optional(),
+  })
+  .partial();
 
 const app = new Hono();
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isValidUuid(id: string): boolean {
-  return UUID_RE.test(id);
-}
 
 /** Walk the manager chain and detect cycles */
 async function wouldCreateCycle(
@@ -63,13 +75,8 @@ app.get("/:id", async (c) => {
 });
 
 // Create agent + generate API key
-app.post("/", async (c) => {
-  const body = await c.req.json();
-  const { name, type, permissions, metadata } = body;
-
-  if (!name || !type) {
-    return c.json({ error: "name and type are required" }, 400);
-  }
+app.post("/", zValidator("json", createAgentSchema), async (c) => {
+  const { name, type, permissions, metadata } = c.req.valid("json");
 
   // Generate API key
   const tempId = crypto.randomUUID();
@@ -98,12 +105,12 @@ app.post("/", async (c) => {
 });
 
 // Update agent
-app.patch("/:id", async (c) => {
+app.patch("/:id", zValidator("json", updateAgentSchema), async (c) => {
   const id = c.req.param("id");
   if (!isValidUuid(id)) {
     return c.json({ error: "Invalid agent ID format" }, 400);
   }
-  const body = await c.req.json();
+  const body = c.req.valid("json");
 
   // Cycle detection for managerId changes
   if (body.managerId !== undefined) {
@@ -150,6 +157,7 @@ app.post("/:id/heartbeat", async (c) => {
     return c.json({ error: "Agent not found" }, 404);
   }
 
+  broadcast({ type: "agent:heartbeat", data: updated, timestamp: new Date().toISOString() });
   return c.json({ ok: true });
 });
 

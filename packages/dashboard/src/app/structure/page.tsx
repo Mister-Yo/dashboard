@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/layout/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -405,12 +408,14 @@ export default function StructurePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-3">
-          <div className="text-5xl animate-pulse">&#127963;</div>
-          <p className="text-[var(--muted)] text-sm">Loading structure...</p>
+      <FadeIn>
+        <PageHeader label="System" title="Company Structure" description="Organization hierarchy and reporting lines" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-24 rounded-2xl" />
+          ))}
         </div>
-      </div>
+      </FadeIn>
     );
   }
 
@@ -461,25 +466,17 @@ export default function StructurePage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] gap-3">
+    <FadeIn className="flex flex-col h-[calc(100vh-3rem)] gap-3">
       {/* Header */}
-      <div className="flex items-center justify-between shrink-0">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">Organization</p>
-          <h1 className="text-2xl font-bold">Company Structure</h1>
-          <p className="text-xs text-[var(--muted)] mt-1">
-            {employees.length} people &middot; {agents.length} agents &middot; Click card to edit reporting
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-full border border-amber-400/20 text-amber-400 bg-amber-400/10">
-            &#128100; {employees.length}
-          </span>
-          <span className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1 rounded-full border border-violet-400/20 text-violet-400 bg-violet-400/10">
-            &#129302; {agents.length}
-          </span>
-        </div>
-      </div>
+      <PageHeader
+        label="System"
+        title="Company Structure"
+        description={`${employees.length} people · ${agents.length} agents · Click card to edit reporting`}
+        stats={[
+          { label: "people", value: employees.length, color: "warning" as const },
+          { label: "agents", value: agents.length, color: "primary" as const },
+        ]}
+      />
 
       {/* Main */}
       <div className="flex-1 flex gap-3 overflow-hidden min-h-0">
@@ -536,6 +533,6 @@ export default function StructurePage() {
           </div>
         </div>
       </div>
-    </div>
+    </FadeIn>
   );
 }

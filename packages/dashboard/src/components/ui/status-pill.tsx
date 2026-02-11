@@ -89,8 +89,10 @@ export function StatusPill({ status }: { status: string }) {
         tone.text,
         tone.bg
       )}
+      role="status"
+      aria-label={`Status: ${tone.label}`}
     >
-      <span className={cn("h-2 w-2 rounded-full", tone.dot)} />
+      <span className={cn("h-2 w-2 rounded-full", tone.dot)} aria-hidden="true" />
       {tone.label}
     </span>
   );

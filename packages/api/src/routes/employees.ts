@@ -4,19 +4,23 @@ import { createHash } from "crypto";
 import { db } from "../db";
 import { employees } from "../db/schema";
 import { generateApiKey } from "../services/api-key";
+import { isValidUuid } from "../lib/utils";
 
 const app = new Hono();
 
 /* ─── Helpers ──────────────────────────────────────────── */
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function isValidUuid(id: string): boolean {
-  return UUID_RE.test(id);
+async function hashPassword(password: string): Promise<string> {
+  return Bun.password.hash(password, { algorithm: "argon2id" });
 }
 
-function hashPassword(password: string): string {
-  return createHash("sha256").update(password).digest("hex");
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  // Support legacy SHA256 hashes (migration path)
+  if (!hash.startsWith("$argon2")) {
+    const sha256 = createHash("sha256").update(password).digest("hex");
+    return sha256 === hash;
+  }
+  return Bun.password.verify(password, hash);
 }
 
 /** Walk the manager chain and detect cycles */
@@ -75,7 +79,7 @@ app.post("/register", async (c) => {
     .values({
       name,
       email: normalizedEmail,
-      passwordHash: hashPassword(password),
+      passwordHash: await hashPassword(password),
       role: role || "employee",
       telegramUsername: telegramUsername ?? null,
       status: "pending",
@@ -117,8 +121,15 @@ app.post("/login", async (c) => {
     return c.json({ error: "Account has no password set. Contact admin." }, 401);
   }
 
-  if (employee.passwordHash !== hashPassword(password)) {
+  const passwordValid = await verifyPassword(password, employee.passwordHash);
+  if (!passwordValid) {
     return c.json({ error: "Invalid email or password" }, 401);
+  }
+
+  // Auto-migrate legacy SHA256 to Argon2id on successful login
+  if (!employee.passwordHash.startsWith("$argon2")) {
+    const newHash = await hashPassword(password);
+    await db.update(employees).set({ passwordHash: newHash }).where(eq(employees.id, employee.id));
   }
 
   if (employee.status === "pending") {
@@ -240,7 +251,7 @@ app.post("/", async (c) => {
       role,
       telegramUsername: telegramUsername ?? null,
       email: email ?? null,
-      passwordHash: password ? hashPassword(password) : null,
+      passwordHash: password ? await hashPassword(password) : null,
     })
     .returning();
 
@@ -282,7 +293,7 @@ app.patch("/:id", async (c) => {
 
   // If password is being updated, hash it
   if (body.password) {
-    body.passwordHash = hashPassword(body.password);
+    body.passwordHash = await hashPassword(body.password);
     delete body.password;
   }
 

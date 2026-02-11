@@ -16,6 +16,23 @@
   --warning: #f59e0b;
   --danger: #f87171;
   --muted: #8b97a7;
+
+  /* Chart palette */
+  --chart-1: #5eead4;
+  --chart-2: #f6c453;
+  --chart-3: #34d399;
+  --chart-4: #f87171;
+  --chart-5: #8b5cf6;
+  --chart-6: #3b82f6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 body {

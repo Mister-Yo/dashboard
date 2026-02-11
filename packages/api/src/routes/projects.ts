@@ -1,12 +1,11 @@
 import { Hono } from "hono";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import { db } from "../db";
-import { projects, blockers, achievements } from "../db/schema";
+import { projects, blockers, achievements, agents, employees, strategyChanges } from "../db/schema";
+import { isValidUuid } from "../lib/utils";
+import { broadcast } from "./sse";
 
 const app = new Hono();
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isValidUuid(id: string): boolean { return UUID_RE.test(id); }
 
 // List all projects
 app.get("/", async (c) => {
@@ -63,14 +62,19 @@ app.post("/", async (c) => {
     })
     .returning();
 
+  broadcast({ type: "project:created", data: { id: project.id, name: project.name }, timestamp: new Date().toISOString() });
   return c.json(project, 201);
 });
 
-// Update project
+// Update project (with auto strategy change recording)
 app.patch("/:id", async (c) => {
   const id = c.req.param("id");
   if (!isValidUuid(id)) return c.json({ error: "Invalid project ID format" }, 400);
   const body = await c.req.json();
+
+  // Fetch current project to compute diff
+  const [current] = await db.select().from(projects).where(eq(projects.id, id));
+  if (!current) return c.json({ error: "Project not found" }, 404);
 
   const [updated] = await db
     .update(projects)
@@ -78,10 +82,45 @@ app.patch("/:id", async (c) => {
     .where(eq(projects.id, id))
     .returning();
 
-  if (!updated) {
-    return c.json({ error: "Project not found" }, 404);
+  // Auto-record strategy change for tracked fields
+  const trackedFields = ["description", "status", "strategyPath", "name"] as const;
+  const diff: Record<string, { old: unknown; new: unknown }> = {};
+  const changes: string[] = [];
+  for (const field of trackedFields) {
+    if (body[field] !== undefined && body[field] !== (current as Record<string, unknown>)[field]) {
+      diff[field] = { old: (current as Record<string, unknown>)[field], new: body[field] };
+      changes.push(`${field}: "${(current as Record<string, unknown>)[field]}" → "${body[field]}"`);
+    }
   }
 
+  if (Object.keys(diff).length > 0) {
+    const owner = c.get("apiKeyOwner");
+    const authorType = owner?.type ?? "ceo";
+    const authorId = owner?.id ?? "system";
+    let authorName = "CEO";
+    if (owner) {
+      if (owner.type === "agent") {
+        const [a] = await db.select({ name: agents.name }).from(agents).where(eq(agents.id, owner.id));
+        if (a) authorName = a.name;
+      } else {
+        const [e] = await db.select({ name: employees.name }).from(employees).where(eq(employees.id, owner.id));
+        if (e) authorName = e.name;
+      }
+    }
+
+    const [sc] = await db.insert(strategyChanges).values({
+      projectId: id,
+      authorType,
+      authorId,
+      authorName,
+      diff: JSON.stringify(diff),
+      summary: changes.join("; "),
+    }).returning();
+
+    broadcast({ type: "strategy:updated", data: { id: sc.id, projectId: id }, timestamp: new Date().toISOString() });
+  }
+
+  broadcast({ type: "project:updated", data: { id: updated.id, name: updated.name }, timestamp: new Date().toISOString() });
   return c.json(updated);
 });
 
@@ -137,6 +176,180 @@ app.post("/:id/achievements", async (c) => {
   return c.json(achievement, 201);
 });
 
+// List strategy changes for a project
+app.get("/:id/strategy-changes", async (c) => {
+  const projectId = c.req.param("id");
+  if (!isValidUuid(projectId)) return c.json({ error: "Invalid project ID format" }, 400);
+
+  const result = await db
+    .select()
+    .from(strategyChanges)
+    .where(eq(strategyChanges.projectId, projectId))
+    .orderBy(desc(strategyChanges.timestamp));
+
+  return c.json(result);
+});
+
+// Record a strategy change manually
+app.post("/:id/strategy-changes", async (c) => {
+  const projectId = c.req.param("id");
+  if (!isValidUuid(projectId)) return c.json({ error: "Invalid project ID format" }, 400);
+
+  const body = await c.req.json();
+  const { authorType, authorId, authorName, diff, summary, commitSha } = body;
+
+  if (!authorType || !authorId || !authorName || !diff || !summary) {
+    return c.json({ error: "authorType, authorId, authorName, diff, summary required" }, 400);
+  }
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  const [sc] = await db
+    .insert(strategyChanges)
+    .values({
+      projectId,
+      authorType,
+      authorId,
+      authorName,
+      diff: typeof diff === "string" ? diff : JSON.stringify(diff),
+      summary,
+      commitSha: commitSha ?? null,
+    })
+    .returning();
+
+  broadcast({ type: "strategy:updated", data: { id: sc.id, projectId }, timestamp: new Date().toISOString() });
+  return c.json(sc, 201);
+});
+
+// Add member to project
+app.post("/:id/members", async (c) => {
+  const projectId = c.req.param("id");
+  if (!isValidUuid(projectId)) return c.json({ error: "Invalid project ID format" }, 400);
+
+  const body = await c.req.json();
+  const { memberId, memberType } = body;
+
+  if (!memberId || !memberType) {
+    return c.json({ error: "memberId and memberType (agent|employee) are required" }, 400);
+  }
+  if (!isValidUuid(memberId)) return c.json({ error: "Invalid member ID format" }, 400);
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  if (memberType === "agent") {
+    const [agent] = await db.select().from(agents).where(eq(agents.id, memberId));
+    if (!agent) return c.json({ error: "Agent not found" }, 404);
+
+    await db.transaction(async (tx) => {
+      await tx.update(agents).set({ currentProjectId: projectId, updatedAt: new Date() }).where(eq(agents.id, memberId));
+      const currentIds = (project.assignedAgentIds ?? []) as string[];
+      if (!currentIds.includes(memberId)) {
+        await tx.update(projects).set({
+          assignedAgentIds: [...currentIds, memberId],
+          updatedAt: new Date(),
+        }).where(eq(projects.id, projectId));
+      }
+    });
+
+    return c.json({ ok: true, memberType: "agent", memberId, projectId }, 201);
+  } else if (memberType === "employee") {
+    const [employee] = await db.select().from(employees).where(eq(employees.id, memberId));
+    if (!employee) return c.json({ error: "Employee not found" }, 404);
+
+    await db.transaction(async (tx) => {
+      const currentProjectIds = (employee.assignedProjectIds ?? []) as string[];
+      if (!currentProjectIds.includes(projectId)) {
+        await tx.update(employees).set({
+          assignedProjectIds: [...currentProjectIds, projectId],
+          updatedAt: new Date(),
+        }).where(eq(employees.id, memberId));
+      }
+      const currentIds = (project.assignedEmployeeIds ?? []) as string[];
+      if (!currentIds.includes(memberId)) {
+        await tx.update(projects).set({
+          assignedEmployeeIds: [...currentIds, memberId],
+          updatedAt: new Date(),
+        }).where(eq(projects.id, projectId));
+      }
+    });
+
+    return c.json({ ok: true, memberType: "employee", memberId, projectId }, 201);
+  }
+
+  return c.json({ error: "memberType must be 'agent' or 'employee'" }, 400);
+});
+
+// Remove member from project
+app.delete("/:id/members/:memberId", async (c) => {
+  const projectId = c.req.param("id");
+  const memberId = c.req.param("memberId");
+  if (!isValidUuid(projectId)) return c.json({ error: "Invalid project ID format" }, 400);
+  if (!isValidUuid(memberId)) return c.json({ error: "Invalid member ID format" }, 400);
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  // Check if it's an agent
+  const [agent] = await db.select().from(agents).where(eq(agents.id, memberId));
+  if (agent) {
+    await db.transaction(async (tx) => {
+      if (agent.currentProjectId === projectId) {
+        await tx.update(agents).set({ currentProjectId: null, updatedAt: new Date() }).where(eq(agents.id, memberId));
+      }
+      const currentIds = (project.assignedAgentIds ?? []) as string[];
+      await tx.update(projects).set({
+        assignedAgentIds: currentIds.filter((id) => id !== memberId),
+        updatedAt: new Date(),
+      }).where(eq(projects.id, projectId));
+    });
+    return c.json({ ok: true, removed: "agent", memberId });
+  }
+
+  // Check if it's an employee
+  const [employee] = await db.select().from(employees).where(eq(employees.id, memberId));
+  if (employee) {
+    await db.transaction(async (tx) => {
+      const currentProjectIds = (employee.assignedProjectIds ?? []) as string[];
+      await tx.update(employees).set({
+        assignedProjectIds: currentProjectIds.filter((id) => id !== projectId),
+        updatedAt: new Date(),
+      }).where(eq(employees.id, memberId));
+
+      const currentIds = (project.assignedEmployeeIds ?? []) as string[];
+      await tx.update(projects).set({
+        assignedEmployeeIds: currentIds.filter((id) => id !== memberId),
+        updatedAt: new Date(),
+      }).where(eq(projects.id, projectId));
+    });
+    return c.json({ ok: true, removed: "employee", memberId });
+  }
+
+  return c.json({ error: "Member not found" }, 404);
+});
+
+// Get project members
+app.get("/:id/members", async (c) => {
+  const projectId = c.req.param("id");
+  if (!isValidUuid(projectId)) return c.json({ error: "Invalid project ID format" }, 400);
+
+  const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+  if (!project) return c.json({ error: "Project not found" }, 404);
+
+  const projectAgents = await db.select().from(agents).where(eq(agents.currentProjectId, projectId));
+  const allEmployees = await db.select().from(employees);
+  const projectEmployees = allEmployees.filter((e) => {
+    const ids = (e.assignedProjectIds ?? []) as string[];
+    return ids.includes(projectId);
+  });
+
+  return c.json({
+    agents: projectAgents.map((a) => ({ id: a.id, name: a.name, type: a.type, status: a.status })),
+    employees: projectEmployees.map((e) => ({ id: e.id, name: e.name, role: e.role, status: e.status })),
+  });
+});
+
 // Delete project
 app.delete("/:id", async (c) => {
   const id = c.req.param("id");
@@ -150,6 +363,7 @@ app.delete("/:id", async (c) => {
     return c.json({ error: "Project not found" }, 404);
   }
 
+  broadcast({ type: "project:deleted", data: { id }, timestamp: new Date().toISOString() });
   return c.json({ ok: true });
 });
 

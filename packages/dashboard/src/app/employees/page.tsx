@@ -1,8 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiFetch } from "@/lib/api";
+import { useMemo } from "react";
+import { useEmployees } from "@/hooks/use-api";
 import { StatusPill } from "@/components/ui/status-pill";
+import { PageHeader } from "@/components/layout/page-header";
+import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/fade-in";
+import { SkeletonGrid } from "@/components/ui/skeleton";
+import { ErrorState } from "@/components/ui/error-state";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Employee {
   id: string;
@@ -15,23 +20,7 @@ interface Employee {
 }
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const data = await apiFetch<Employee[]>("/api/employees");
-        setEmployees(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load employees");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  const { data: employees = [], isLoading: loading, error: empError, refetch } = useEmployees();
 
   const summary = useMemo(() => {
     const total = employees.length;
@@ -42,100 +31,92 @@ export default function EmployeesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-[var(--muted)]">Loading employees...</p>
-      </div>
+      <FadeIn>
+        <PageHeader label="Employees" title="Human Team" />
+        <SkeletonGrid count={6} />
+      </FadeIn>
     );
   }
 
-  if (error) {
+  if (empError) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center">
-          <p className="text-red-400 mb-2">Failed to connect to API</p>
-          <p className="text-[var(--muted)] text-sm">{error}</p>
-        </div>
-      </div>
+      <ErrorState
+        message="Failed to connect to API"
+        detail={empError?.message}
+        onRetry={() => refetch()}
+      />
     );
   }
 
   return (
-    <div className="space-y-8">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
-            Employees
-          </p>
-          <h1 className="text-3xl font-semibold">Human Team</h1>
-          <p className="text-sm text-[var(--muted)] mt-2 max-w-xl">
-            Track employees, their current status, and project assignments.
-            New employees register via <a href="/login" className="underline text-[var(--accent)]">/login</a> and are approved on <a href="/admin" className="underline text-[var(--accent)]">/admin</a>.
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-xs text-[var(--muted)]">
-          <span className="rounded-full border border-[var(--card-border)] px-3 py-1">
-            {summary.total} total
-          </span>
-          <span className="rounded-full border border-emerald-400/30 text-emerald-400 bg-emerald-400/10 px-3 py-1">
-            {summary.active} active
-          </span>
-          {summary.pending > 0 && (
-            <span className="rounded-full border border-amber-400/30 text-amber-400 bg-amber-400/10 px-3 py-1">
-              {summary.pending} pending
-            </span>
+    <FadeIn>
+      <div className="space-y-8">
+        <PageHeader
+          label="Employees"
+          title="Human Team"
+          description="Track employees, their current status, and project assignments."
+          stats={[
+            { label: "total", value: summary.total, color: "muted" as const },
+            { label: "active", value: summary.active, color: "success" as const },
+            ...(summary.pending > 0
+              ? [{ label: "pending", value: summary.pending, color: "warning" as const }]
+              : []),
+          ]}
+        />
+
+        <FadeInStagger className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {employees.map((employee) => (
+            <FadeInItem key={employee.id}>
+              <div
+                className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4"
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                      Employee
+                    </p>
+                    <h3 className="text-lg font-semibold">{employee.name}</h3>
+                    <p className="text-xs text-[var(--muted)] mt-1">
+                      {employee.role}
+                    </p>
+                  </div>
+                  <StatusPill status={employee.status} />
+                </div>
+
+                <div className="mt-4 space-y-2 text-xs text-[var(--muted)]">
+                  <div className="flex items-center justify-between">
+                    <span>Telegram</span>
+                    <span className="text-[var(--foreground)]">
+                      {employee.telegramUsername ?? "\u2014"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Email</span>
+                    <span className="text-[var(--foreground)]">
+                      {employee.email ?? "\u2014"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
+                  <p className="text-[var(--muted)]">Assigned projects</p>
+                  <p className="text-sm font-medium">
+                    {employee.assignedProjectIds?.length ?? 0}
+                  </p>
+                </div>
+              </div>
+            </FadeInItem>
+          ))}
+
+          {employees.length === 0 && (
+            <EmptyState
+              icon="👤"
+              title="No employees registered yet"
+              description="Employees register via /login and are approved on /admin."
+            />
           )}
-        </div>
-      </header>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {employees.map((employee) => (
-          <div
-            key={employee.id}
-            className="rounded-2xl border border-[var(--card-border)] bg-[var(--card)] p-4"
-          >
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
-                  Employee
-                </p>
-                <h3 className="text-lg font-semibold">{employee.name}</h3>
-                <p className="text-xs text-[var(--muted)] mt-1">
-                  {employee.role}
-                </p>
-              </div>
-              <StatusPill status={employee.status} />
-            </div>
-
-            <div className="mt-4 space-y-2 text-xs text-[var(--muted)]">
-              <div className="flex items-center justify-between">
-                <span>Telegram</span>
-                <span className="text-[var(--foreground)]">
-                  {employee.telegramUsername ?? "\u2014"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Email</span>
-                <span className="text-[var(--foreground)]">
-                  {employee.email ?? "\u2014"}
-                </span>
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-xl border border-[var(--card-border)] bg-[var(--surface-2)] px-3 py-2 text-xs">
-              <p className="text-[var(--muted)]">Assigned projects</p>
-              <p className="text-sm font-medium">
-                {employee.assignedProjectIds?.length ?? 0}
-              </p>
-            </div>
-          </div>
-        ))}
-
-        {employees.length === 0 && (
-          <div className="col-span-full rounded-2xl border border-dashed border-[var(--card-border)] p-8 text-center text-[var(--muted)]">
-            No employees registered yet.
-          </div>
-        )}
-      </section>
-    </div>
+        </FadeInStagger>
+      </div>
+    </FadeIn>
   );
 }

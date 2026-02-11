@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { Sidebar } from "@/components/layout/Sidebar";
+import { ErrorBoundary } from "@/components/layout/ErrorBoundary";
+import { QueryProvider } from "@/lib/query-provider";
 
 const space = Space_Grotesk({
   subsets: ["latin"],
@@ -30,8 +32,12 @@ export default function RootLayout({
       <body
         className={`${space.variable} ${jetbrains.variable} flex min-h-screen bg-[var(--background)] text-[var(--foreground)]`}
       >
-        <Sidebar />
-        <main className="flex-1 p-4 pt-16 lg:p-6 lg:pt-6 overflow-auto">{children}</main>
+        <QueryProvider>
+          <Sidebar />
+          <main className="flex-1 p-4 pt-16 lg:p-6 lg:pt-6 overflow-auto">
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </main>
+        </QueryProvider>
       </body>
     </html>
   );

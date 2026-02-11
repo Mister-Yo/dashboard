@@ -3,19 +3,32 @@ import { createHash } from "crypto";
 import { eq, and } from "drizzle-orm";
 import { db } from "../db";
 import { apiKeys } from "../db/schema";
-import type { ApiKeyOwner } from "@dashboard/shared";
+
+export interface ApiKeyOwner {
+  type: "agent" | "employee";
+  id: string;
+  scopes: string[];
+}
 
 declare module "hono" {
   interface ContextVariableMap {
-    apiKeyOwner: ApiKeyOwner;
+    apiKeyOwner: ApiKeyOwner | null;
   }
 }
 
+/**
+ * Optional auth middleware — sets apiKeyOwner if valid key provided,
+ * allows unauthenticated requests through (for dashboard frontend).
+ * Use requireAuth() middleware for endpoints that MUST be authenticated.
+ */
 export const apiKeyAuth = createMiddleware(async (c, next) => {
   const authHeader = c.req.header("Authorization");
 
   if (!authHeader?.startsWith("Bearer ak_")) {
-    return c.json({ error: "Missing or invalid API key" }, 401);
+    // No API key — allow through but set owner to null
+    c.set("apiKeyOwner", null);
+    await next();
+    return;
   }
 
   const rawKey = authHeader.replace("Bearer ", "");
@@ -43,8 +56,20 @@ export const apiKeyAuth = createMiddleware(async (c, next) => {
   c.set("apiKeyOwner", {
     type: record.ownerType,
     id: record.ownerId,
-    scopes: record.scopes ?? [],
+    scopes: (record.scopes ?? []) as string[],
   });
 
+  await next();
+});
+
+/**
+ * Strict auth middleware — requires valid API key.
+ * Use after apiKeyAuth on endpoints that need authentication.
+ */
+export const requireAuth = createMiddleware(async (c, next) => {
+  const owner = c.get("apiKeyOwner");
+  if (!owner) {
+    return c.json({ error: "Authentication required. Provide API key via Authorization: Bearer ak_..." }, 401);
+  }
   await next();
 });

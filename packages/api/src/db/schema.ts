@@ -9,7 +9,21 @@ import {
   integer,
   real,
   pgEnum,
+  customType,
 } from "drizzle-orm/pg-core";
+
+// Custom type for pgvector
+const vector = customType<{ data: number[]; driverData: string; notNull: false }>({
+  dataType() {
+    return "vector(1024)";
+  },
+  toDriver(value: number[]): string {
+    return `[${value.join(",")}]`;
+  },
+  fromDriver(value: string): number[] {
+    return JSON.parse(value) as number[];
+  },
+});
 
 // --- Enums ---
 
@@ -147,6 +161,8 @@ export const employees = pgTable("employees", {
   workStatus: workStatusEnum("work_status").default("idle").notNull(),
   managerId: uuid("manager_id"),
   currentTaskDescription: text("current_task_description"),
+  githubId: varchar("github_id", { length: 64 }),
+  avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -223,6 +239,10 @@ export const knowledgeEntries = pgTable("knowledge_entries", {
   tags: jsonb("tags").$type<string[]>().default([]),
   source: knowledgeSourceEnum("source").notNull(),
   sourceMessageId: varchar("source_message_id", { length: 255 }),
+  embedding: vector("embedding"),
+  parentEntryId: uuid("parent_entry_id"),
+  chunkIndex: integer("chunk_index"),
+  searchVector: text("search_vector"), // tsvector managed by DB trigger
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -258,6 +278,32 @@ export const performanceEvaluations = pgTable("performance_evaluations", {
   recommendations: jsonb("recommendations").$type<string[]>().default([]),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+// --- Coordinator ---
+
+export const coordThreads = pgTable("coord_threads", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  projectId: uuid("project_id").references(() => projects.id),
+  taskId: uuid("task_id").references(() => tasks.id),
+  threadType: varchar("thread_type", { length: 50 }).notNull().default("general"),
+  title: varchar("title", { length: 500 }),
+  createdBy: varchar("created_by", { length: 255 }),
+  isDirectMessage: boolean("is_direct_message").default(false).notNull(),
+  participantIds: jsonb("participant_ids").$type<string[]>().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const coordMessages = pgTable("coord_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  threadId: uuid("thread_id").notNull().references(() => coordThreads.id, { onDelete: "cascade" }),
+  senderId: varchar("sender_id", { length: 255 }),
+  messageType: varchar("message_type", { length: 50 }).notNull().default("note"),
+  payload: jsonb("payload").$type<Record<string, unknown>>().default({}),
+  replyTo: uuid("reply_to"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// --- Activity ---
 
 export const activityEvents = pgTable("activity_events", {
   id: uuid("id").primaryKey().defaultRandom(),

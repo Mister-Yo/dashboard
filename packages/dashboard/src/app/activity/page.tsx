@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
-import { apiFetch } from "@/lib/api";
+import { useMemo, useState } from "react";
+import { useActivityStatus, useActivityEvents } from "@/hooks/use-api";
+import { FadeIn } from "@/components/ui/fade-in";
+import { PageHeader } from "@/components/layout/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 
 /* ─── Types ──────────────────────────────────────────────── */
 
@@ -351,31 +354,16 @@ function EventStream({ events }: { events: ActivityEvent[] }) {
 /* ─── Main Page ──────────────────────────────────────────── */
 
 export default function ActivityPage() {
-  const [entities, setEntities] = useState<WorkEntity[]>([]);
-  const [events, setEvents] = useState<ActivityEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: statusData, isLoading: statusLoading } = useActivityStatus();
+  const { data: events = [], isLoading: eventsLoading } = useActivityEvents();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    try {
-      const [st, ev] = await Promise.all([
-        apiFetch<{ agents: WorkEntity[]; employees: WorkEntity[] }>("/api/activity/status"),
-        apiFetch<ActivityEvent[]>("/api/activity?limit=50"),
-      ]);
-      setEntities([...st.agents, ...st.employees]);
-      setEvents(ev);
-    } catch (e) {
-      console.error("Activity load failed:", e);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loading = statusLoading || eventsLoading;
 
-  useEffect(() => {
-    loadData();
-    const t = setInterval(loadData, 10000);
-    return () => clearInterval(t);
-  }, [loadData]);
+  const entities = useMemo(() => {
+    if (!statusData) return [];
+    return [...statusData.agents, ...statusData.employees] as WorkEntity[];
+  }, [statusData]);
 
   const agents = useMemo(() => entities.filter(e => e.entityType === "agent"), [entities]);
   const employees = useMemo(() => entities.filter(e => e.entityType === "employee"), [entities]);
@@ -389,12 +377,14 @@ export default function ActivityPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-center space-y-3">
-          <div className="text-5xl animate-pulse">🏢</div>
-          <p className="text-[var(--muted)] text-sm animate-pulse">Loading office...</p>
+      <FadeIn>
+        <PageHeader label="Command" title="Office" description="Live view of team activity and office layout" />
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 mt-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 rounded-2xl" />
+          ))}
         </div>
-      </div>
+      </FadeIn>
     );
   }
 
@@ -402,7 +392,7 @@ export default function ActivityPage() {
   const svgH = GH * T;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-3rem)] gap-3">
+    <FadeIn className="flex flex-col h-[calc(100vh-3rem)] gap-3">
       {/* ── Header ────── */}
       <div className="flex items-center justify-between flex-wrap gap-2 shrink-0">
         <div className="flex items-center gap-3">
@@ -595,6 +585,6 @@ export default function ActivityPage() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-    </div>
+    </FadeIn>
   );
 }
