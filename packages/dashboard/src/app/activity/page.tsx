@@ -171,7 +171,7 @@ function StatusCard({ entity, selected, onClick }: {
       <div className="px-4 pb-4">
         <CardStat 
           label="Last Heartbeat" 
-          value={formatTimeAgo(entity.lastHeartbeat)}
+          value={formatTimeAgo(entity.lastHeartbeat ?? null)}
         />
       </div>
     </Card>
